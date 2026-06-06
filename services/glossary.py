@@ -15,13 +15,70 @@ Questa applicazione confronta tre alternative sullo stesso orizzonte temporale:
 L'obiettivo è mostrare l'impatto combinato di mercato, costi, fiscalità e inflazione.
 
 ### Come configurare una simulazione
-1. Inserisci i ticker Yahoo Finance separati da virgola, ad esempio `SWDA.MI, EIMI.MI`.
-2. Inserisci i pesi del portafoglio, ad esempio `80, 20`. Se non inserisci nulla, il portafoglio sarà equiponderato.
-3. Scegli data iniziale e finale.
-4. Configura importo, frequenza e giorno del versamento PAC.
-5. Configura capitale Buy and Hold: manuale o uguale al totale versato dal PAC.
-6. Inserisci costi, TER, aliquota fiscale e tasso risk-free.
-7. Scegli inflazione manuale o CSV storico.
+
+1. **Configura il portafoglio**
+
+   Puoi configurare il portafoglio in due modi:
+
+   **Modalità manuale**
+
+   - Inserisci i ticker Yahoo Finance separati da virgola, ad esempio `SWDA.MI, EIMI.MI`.
+   - Inserisci i pesi del portafoglio, ad esempio `80, 20`.
+   - I pesi possono essere espressi sia come percentuali (`80, 20`) sia come valori decimali (`0.8, 0.2`).
+   - Se non inserisci i pesi, il portafoglio viene considerato equiponderato.
+
+   **Modalità da file Excel/CSV**
+
+   - Carica un file `.xlsx` oppure `.csv` contenente almeno due colonne: `ticker` e `peso`.
+   - Esempio:
+
+     | ticker | peso |
+     |---|---:|
+     | FCT.MI | 50 |
+     | LDO.MI | 20 |
+     | 1AIR.MI | 30 |
+
+   - Il campo `ticker` deve contenere i simboli Yahoo Finance degli strumenti.
+   - Il campo `peso` deve contenere il peso desiderato di ciascun asset.
+   - I pesi possono essere indicati come percentuali (`50, 20, 30`) oppure come valori decimali (`0.5, 0.2, 0.3`).
+   - Se lo stesso ticker compare più volte nel file, i pesi vengono sommati.
+   - Dopo il caricamento, l'app mostra un'anteprima del portafoglio importato e usa automaticamente quei ticker e quei pesi per la simulazione.
+
+2. **Scegli il periodo di analisi**
+
+   - Seleziona la data iniziale e la data finale della simulazione.
+   - Se la data selezionata non è un giorno di negoziazione, l'app utilizza il primo giorno di mercato disponibile secondo la logica impostata.
+
+3. **Configura il PAC**
+
+   - Inserisci l'importo del versamento periodico.
+   - Scegli la frequenza del versamento: mensile o trimestrale.
+   - Imposta il giorno del versamento.
+   - Puoi attivare l'opzione per acquistare al primo giorno di mercato disponibile.
+
+4. **Configura il Buy and Hold**
+
+   - Scegli se inserire manualmente il capitale iniziale.
+   - In alternativa, puoi impostare il capitale Buy and Hold uguale al capitale totale versato dal PAC nel periodo selezionato.
+
+5. **Configura costi, fiscalità e rischio**
+
+   - Inserisci commissioni fisse e percentuali per il PAC.
+   - Inserisci commissioni fisse e percentuali per il Buy and Hold.
+   - Imposta eventuali costi di cambio, slippage e TER annuo ETF.
+   - Inserisci l'aliquota fiscale sulle plusvalenze.
+   - Inserisci il tasso risk-free usato per il calcolo dello Sharpe Ratio.
+
+6. **Configura l'inflazione**
+
+   - Puoi inserire manualmente un tasso medio annuo di inflazione.
+   - In alternativa, puoi caricare un CSV storico contenente i dati di inflazione.
+   - Il CSV storico deve contenere una colonna data e una colonna con il tasso di inflazione annualizzato.
+
+7. **Esegui la simulazione**
+
+   - Clicca su **Esegui simulazione**.
+   - L'app scarica i dati storici da Yahoo Finance, calcola le tre strategie e aggiorna dashboard, grafici, tabelle e file esportabili.
 
 ### Come interpretare i risultati
 - **Valore finale lordo**: valore prima della tassazione finale, dopo costi di acquisto e TER.
