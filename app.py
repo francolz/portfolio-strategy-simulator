@@ -35,7 +35,7 @@ from utils.dates import generate_contribution_dates
 from utils.export import create_excel_export, dataframe_to_csv_bytes
 from utils.helpers import format_currency, format_percentage, parse_tickers, parse_weights
 
-
+from datetime import date
 st.set_page_config(page_title=APP_TITLE, page_icon=APP_ICON, layout="wide")
 
 
@@ -66,6 +66,103 @@ CURRENCY_ROWS = {
 }
 LOWER_IS_BETTER = {"Costi", "Tasse", "Maximum Drawdown", "Volatilità annualizzata"}
 
+def parse_portfolio_upload(uploaded_file) -> tuple[str, str, pd.DataFrame]:
+    """Legge un portafoglio da file Excel/CSV.
+
+    Il file deve contenere almeno due colonne:
+    - ticker
+    - peso
+
+    Sono accettati anche nomi colonna alternativi:
+    - ticker, symbol, simbolo, asset
+    - peso, weight, allocazione, allocation, percentuale
+
+    Returns:
+        tuple con:
+        - stringa ticker compatibile con parse_tickers()
+        - stringa pesi compatibile con parse_weights()
+        - DataFrame pulito per anteprima
+    """
+    if uploaded_file is None:
+        raise ValueError("Nessun file caricato.")
+
+    file_name = uploaded_file.name.lower()
+
+    try:
+        uploaded_file.seek(0)
+
+        if file_name.endswith(".xlsx"):
+            df = pd.read_excel(uploaded_file)
+        elif file_name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file, sep=None, engine="python")
+        else:
+            raise ValueError("Formato file non supportato. Usa .xlsx oppure .csv.")
+
+    except Exception as exc:
+        raise ValueError(f"Errore durante la lettura del file portafoglio: {exc}") from exc
+
+    if df.empty:
+        raise ValueError("Il file portafoglio è vuoto.")
+
+    normalized_columns = {
+        str(column).strip().lower(): column
+        for column in df.columns
+    }
+
+    ticker_aliases = ["ticker", "tickers", "symbol", "simbolo", "asset"]
+    weight_aliases = ["peso", "pesi", "weight", "weights", "allocazione", "allocation", "percentuale"]
+
+    ticker_column = next(
+        (normalized_columns[col] for col in ticker_aliases if col in normalized_columns),
+        None,
+    )
+    weight_column = next(
+        (normalized_columns[col] for col in weight_aliases if col in normalized_columns),
+        None,
+    )
+
+    if ticker_column is None or weight_column is None:
+        raise ValueError(
+            "Il file deve contenere una colonna ticker e una colonna peso. "
+            "Esempio: ticker | peso"
+        )
+
+    portfolio_df = df[[ticker_column, weight_column]].copy()
+    portfolio_df.columns = ["ticker", "peso"]
+
+    portfolio_df["ticker"] = (
+        portfolio_df["ticker"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    portfolio_df["peso"] = pd.to_numeric(
+        portfolio_df["peso"]
+        .astype(str)
+        .str.replace("%", "", regex=False)
+        .str.replace(",", ".", regex=False),
+        errors="coerce",
+    )
+
+    portfolio_df = portfolio_df.dropna(subset=["ticker", "peso"])
+    portfolio_df = portfolio_df[portfolio_df["ticker"] != ""]
+    portfolio_df = portfolio_df[portfolio_df["peso"] > 0]
+
+    if portfolio_df.empty:
+        raise ValueError("Il file non contiene righe valide con ticker e peso positivo.")
+
+    # Se lo stesso ticker compare più volte, sommiamo i pesi.
+    portfolio_df = (
+        portfolio_df
+        .groupby("ticker", as_index=False)["peso"]
+        .sum()
+    )
+
+    tickers_raw = ", ".join(portfolio_df["ticker"].tolist())
+    weights_raw = ", ".join(portfolio_df["peso"].map(lambda value: f"{value:g}").tolist())
+
+    return tickers_raw, weights_raw, portfolio_df
 
 def main() -> None:
     """Entry point dell'applicazione Streamlit.
@@ -110,10 +207,71 @@ def main() -> None:
 def render_sidebar() -> dict:
     """Renderizza tutti gli input utente nella sidebar e restituisce la configurazione."""
     st.sidebar.header("1. Portafoglio")
-    tickers_raw = st.sidebar.text_input("Ticker Yahoo Finance", value=DEFAULT_TICKERS)
-    weights_raw = st.sidebar.text_input("Pesi portafoglio", value=DEFAULT_WEIGHTS, help="Esempio: 80, 20 oppure 0.8, 0.2")
-    start_date = st.sidebar.date_input("Data inizio", value=pd.Timestamp(DEFAULT_START).date())
-    end_date = st.sidebar.date_input("Data fine", value=date.today())
+
+    portfolio_file = st.sidebar.file_uploader(
+        "Carica portafoglio da Excel/CSV",
+        type=["xlsx", "csv"],
+        help=(
+            "File atteso con colonne ticker e peso. "
+            "Esempio: ticker | peso con valori FCT.MI | 50"
+        ),
+    )
+
+    if portfolio_file is not None:
+        try:
+            tickers_raw, weights_raw, portfolio_preview = parse_portfolio_upload(portfolio_file)
+
+            st.sidebar.success("Portafoglio caricato correttamente.")
+            st.sidebar.dataframe(
+                portfolio_preview,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.sidebar.text_input(
+                "Ticker Yahoo Finance",
+                value=tickers_raw,
+                disabled=True,
+                help="Valori letti dal file caricato.",
+            )
+
+            st.sidebar.text_input(
+                "Pesi portafoglio",
+                value=weights_raw,
+                disabled=True,
+                help="Valori letti dal file caricato.",
+            )
+
+        except ValueError as exc:
+            st.sidebar.error(str(exc))
+            tickers_raw = st.sidebar.text_input("Ticker Yahoo Finance", value=DEFAULT_TICKERS)
+            weights_raw = st.sidebar.text_input(
+                "Pesi portafoglio",
+                value=DEFAULT_WEIGHTS,
+                help="Esempio: 80, 20 oppure 0.8, 0.2",
+            )
+
+    else:
+        tickers_raw = st.sidebar.text_input("Ticker Yahoo Finance", value=DEFAULT_TICKERS)
+        weights_raw = st.sidebar.text_input(
+            "Pesi portafoglio",
+            value=DEFAULT_WEIGHTS,
+            help="Esempio: 80, 20 oppure 0.8, 0.2",
+        )
+
+    start_date = st.sidebar.date_input(
+        "Data inizio",
+        value=pd.Timestamp(DEFAULT_START).date(),
+        min_value=date(2000, 1, 1),
+        max_value=date.today(),
+    )
+
+    end_date = st.sidebar.date_input(
+        "Data fine",
+        value=date.today(),
+        min_value=date(2000, 1, 1),
+        max_value=date.today(),
+    )
 
     st.sidebar.header("2. Parametri PAC")
     pac_amount = st.sidebar.number_input("Importo versamento periodico", min_value=1.0, value=500.0, step=50.0)
