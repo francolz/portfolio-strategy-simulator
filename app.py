@@ -539,6 +539,24 @@ Date,inflation_rate,country,source,calculation
 2015-01-01,0.005,Italy,Eurostat/FRED,YoY CPI or HICP inflation
 2015-02-01,0.002,Italy,Eurostat/FRED,YoY CPI or HICP inflation""".strip()
 
+def get_default_start_date() -> date:
+    """Restituisce la data di default per l'inizio simulazione.
+
+    Usa la data odierna meno un anno. Se cade di sabato o domenica,
+    la sposta al primo lunedì successivo.
+
+    Nota: non gestisce tutte le festività di Borsa Italiana, ma evita
+    almeno weekend e date palesemente non operative.
+    """
+    default_date = date.today().replace(year=date.today().year - 1)
+
+    # 5 = sabato, 6 = domenica
+    if default_date.weekday() == 5:
+        default_date = default_date + pd.Timedelta(days=2)
+    elif default_date.weekday() == 6:
+        default_date = default_date + pd.Timedelta(days=1)
+
+    return default_date
 
 def render_sidebar() -> dict:
     """Renderizza tutti gli input utente nella sidebar e restituisce la configurazione."""
@@ -635,7 +653,7 @@ def render_sidebar() -> dict:
 
     start_date = st.sidebar.date_input(
         "Data inizio",
-        value=pd.Timestamp(DEFAULT_START).date(),
+        value=get_default_start_date(),
         min_value=date(2000, 1, 1),
         max_value=date.today(),
     )
@@ -707,6 +725,77 @@ def render_sidebar() -> dict:
                 f"Dettaglio: {exc}"
             )
 
+    
+    st.sidebar.header("2. Parametri PAC")
+    pac_amount = st.sidebar.number_input(
+        "Importo versamento periodico",
+        min_value=1.0,
+        value=500.0,
+        step=50.0,
+    )
+    pac_frequency = st.sidebar.selectbox("Frequenza", ["Mensile", "Trimestrale"], index=0)
+    use_custom_day = st.sidebar.checkbox("Imposta giorno del versamento", value=True)
+
+    pac_day = None
+    if use_custom_day:
+        pac_day = int(
+            st.sidebar.number_input(
+                "Giorno del mese",
+                min_value=1,
+                max_value=31,
+                value=1,
+                step=1,
+            )
+        )
+
+    buy_next_market_day = st.sidebar.checkbox(
+        "Acquista al primo giorno di mercato disponibile",
+        value=True,
+    )
+
+    st.sidebar.header("3. Buy and Hold")
+    bh_mode = st.sidebar.radio(
+        "Modalità capitale iniziale",
+        ["Capitale manuale", "Uguale al capitale totale versato dal PAC"],
+        index=1,
+    )
+    bh_initial_capital = st.sidebar.number_input(
+        "Capitale iniziale manuale",
+        min_value=1.0,
+        value=10_000.0,
+        step=500.0,
+    )
+
+    st.sidebar.header("4. Costi PAC")
+    pac_costs = render_cost_inputs("pac", "PAC")
+
+    st.sidebar.header("5. Costi Buy and Hold")
+    bh_costs = render_cost_inputs("bh", "Buy and Hold")
+
+    st.sidebar.header("6. Fiscalità e rischio")
+    tax_rate = (
+        st.sidebar.number_input(
+            "Aliquota fiscale plusvalenze (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=DEFAULT_TAX_RATE,
+            step=0.5,
+        )
+        / 100.0
+    )
+
+    risk_free_rate = (
+        st.sidebar.number_input(
+            "Risk-free rate annuo (%)",
+            min_value=-10.0,
+            max_value=30.0,
+            value=DEFAULT_RISK_FREE_RATE,
+            step=0.25,
+        )
+        / 100.0
+    )
+
+    st.sidebar.header("7. Inflazione")
     with st.sidebar.expander("🤖 Genera prompt inflazione.csv", expanded=False):
         st.caption(
             "Genera un prompt da copiare in ChatGPT per creare un CSV storico "
@@ -793,76 +882,6 @@ def render_sidebar() -> dict:
             use_container_width=True,
         )
 
-    st.sidebar.header("2. Parametri PAC")
-    pac_amount = st.sidebar.number_input(
-        "Importo versamento periodico",
-        min_value=1.0,
-        value=500.0,
-        step=50.0,
-    )
-    pac_frequency = st.sidebar.selectbox("Frequenza", ["Mensile", "Trimestrale"], index=0)
-    use_custom_day = st.sidebar.checkbox("Imposta giorno del versamento", value=True)
-
-    pac_day = None
-    if use_custom_day:
-        pac_day = int(
-            st.sidebar.number_input(
-                "Giorno del mese",
-                min_value=1,
-                max_value=31,
-                value=1,
-                step=1,
-            )
-        )
-
-    buy_next_market_day = st.sidebar.checkbox(
-        "Acquista al primo giorno di mercato disponibile",
-        value=True,
-    )
-
-    st.sidebar.header("3. Buy and Hold")
-    bh_mode = st.sidebar.radio(
-        "Modalità capitale iniziale",
-        ["Capitale manuale", "Uguale al capitale totale versato dal PAC"],
-        index=1,
-    )
-    bh_initial_capital = st.sidebar.number_input(
-        "Capitale iniziale manuale",
-        min_value=1.0,
-        value=10_000.0,
-        step=500.0,
-    )
-
-    st.sidebar.header("4. Costi PAC")
-    pac_costs = render_cost_inputs("pac", "PAC")
-
-    st.sidebar.header("5. Costi Buy and Hold")
-    bh_costs = render_cost_inputs("bh", "Buy and Hold")
-
-    st.sidebar.header("6. Fiscalità e rischio")
-    tax_rate = (
-        st.sidebar.number_input(
-            "Aliquota fiscale plusvalenze (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=DEFAULT_TAX_RATE,
-            step=0.5,
-        )
-        / 100.0
-    )
-
-    risk_free_rate = (
-        st.sidebar.number_input(
-            "Risk-free rate annuo (%)",
-            min_value=-10.0,
-            max_value=30.0,
-            value=DEFAULT_RISK_FREE_RATE,
-            step=0.25,
-        )
-        / 100.0
-    )
-
-    st.sidebar.header("7. Inflazione")
     inflation_mode = st.sidebar.radio(
         "Modalità inflazione",
         ["Tasso medio annuo manuale", "CSV storico"],
