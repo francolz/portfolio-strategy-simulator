@@ -263,6 +263,7 @@ Un PAC su un singolo BTP è meno comune rispetto a un PAC su ETF. Ha più senso 
 
 Per un BTP acquistato e mantenuto fino a scadenza, il Buy and Hold è spesso la modalità più coerente. Il PAC può essere usato solo come confronto teorico.
 
+
 ### Fiscalità e rischio
 
 | Parametro                    |                     Valore suggerito |
@@ -288,6 +289,22 @@ Attenzione: l'app usa gli Adjusted Close di Yahoo Finance. Per singoli BTP, la q
 | BTP italiano |    0% |     12,5% | 0,05% - 0,20% |           0% |                fissa 7-12 € | fissa 7-12 € oppure 0-0,10% |
 
 Questi valori non sostituiscono le condizioni contrattuali del proprio intermediario, ma permettono di ottenere simulazioni più realistiche rispetto a uno scenario senza costi.
+
+
+### Assistenti ChatGPT integrati
+
+L'app include tre strumenti di supporto che generano prompt già pronti da copiare in ChatGPT. Questi assistenti non modificano direttamente la simulazione, ma aiutano l'utente a preparare meglio i dati e a scegliere parametri più realistici.
+
+* **Non conosci i ticker Yahoo?**
+  Permette di partire da nomi comuni di strumenti finanziari, ad esempio `Enel`, `Ferrari`, `MSCI World ETF`, e genera un prompt per ottenere un file `portafoglio.xlsx` compatibile con l'app.
+
+* **Ask ChatGPT per configurare i parametri**
+  Usa il portafoglio già definito e il nome del broker indicato dall'utente per generare un prompt che chiede suggerimenti realistici su commissioni, TER, slippage, fiscalità, inflazione e risk-free rate.
+
+* **Genera prompt inflazione.csv**
+  Aiuta a creare un prompt per ottenere un file CSV storico dell'inflazione, scegliendo paese, periodo, frequenza e fonte dati preferita.
+
+Queste funzioni sono utili quando l'utente non conosce il ticker corretto, non sa quali costi inserire o vuole costruire un file di inflazione coerente con il periodo simulato.
 
 
 ### Come interpretare i risultati
