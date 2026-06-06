@@ -248,7 +248,110 @@ def render_market_data_warning(
             use_container_width=True,
             hide_index=True,
         )
- 
+def portfolio_df_to_markdown(portfolio_df: pd.DataFrame) -> str:
+    """Converte il DataFrame del portafoglio in una piccola tabella Markdown.
+
+    Evita di usare DataFrame.to_markdown(), così non serve aggiungere
+    la dipendenza tabulate al requirements.txt.
+    """
+    lines = [
+        "| ticker | peso (%) |",
+        "|---|---:|",
+    ]
+
+    for _, row in portfolio_df.iterrows():
+        lines.append(f"| {row['ticker']} | {row['peso']:.2f} |")
+
+    return "\n".join(lines)
+
+
+def generate_chatgpt_configuration_prompt(
+    broker_name: str,
+    portfolio_df: pd.DataFrame,
+    start_date: date,
+    end_date: date,
+) -> str:
+    """Genera un prompt da copiare in ChatGPT per configurare i parametri."""
+    broker = broker_name.strip() if broker_name.strip() else "[INSERISCI NOME BROKER]"
+    portfolio_markdown = portfolio_df_to_markdown(portfolio_df)
+
+    return f"""
+Sto usando questo simulatore Streamlit di strategie di investimento:
+
+https://github.com/francolz/portfolio-strategy-simulator
+
+Il mio broker/intermediario è: {broker}
+
+Il periodo che voglio simulare è:
+
+- Data inizio: {start_date}
+- Data fine: {end_date}
+
+Questa è la composizione del mio portafoglio:
+
+{portfolio_markdown}
+
+Voglio configurare il simulatore nel modo più realistico possibile.
+
+Aiutami a stimare i parametri più sensati per questo broker e per questi strumenti finanziari.
+
+Il simulatore confronta:
+
+1. PAC
+2. Buy and Hold
+3. Capitale non investito eroso dall'inflazione
+
+Indicami valori realistici per tutti questi parametri:
+
+## Parametri PAC
+
+- Importo versamento periodico consigliato
+- Frequenza consigliata: mensile o trimestrale
+- Giorno del versamento
+- Commissione fissa PAC
+- Commissione percentuale PAC
+- Costi di cambio PAC
+- Slippage PAC
+- TER annuo ETF PAC
+
+## Parametri Buy and Hold
+
+- Capitale iniziale consigliato
+- Se ha senso usare capitale manuale o uguale al totale versato dal PAC
+- Commissione fissa Buy and Hold
+- Commissione percentuale Buy and Hold
+- Costi di cambio Buy and Hold
+- Slippage Buy and Hold
+- TER annuo ETF Buy and Hold
+
+## Fiscalità
+
+- Aliquota fiscale sulle plusvalenze
+- Eventuali differenze tra ETF, azioni, obbligazioni o titoli di Stato
+- Come impostare la fiscalità se il portafoglio contiene strumenti con tassazione diversa
+
+## Inflazione
+
+- Se usare inflazione manuale o CSV storico
+- Tasso medio annuo realistico da usare in assenza di CSV
+
+## Rischio
+
+- Risk-free rate annuo realistico per il calcolo dello Sharpe Ratio
+
+## Note operative
+
+- Eventuali problemi di valuta
+- Eventuali problemi di liquidità
+- Eventuali limiti dei dati Yahoo Finance
+- Eventuali ticker alternativi più adatti se quelli indicati hanno storico incompleto
+- Eventuali accorgimenti per rendere la simulazione più realistica
+
+Rispondimi con una tabella pratica pronta da usare nel simulatore.
+
+Quando non hai dati certi sulle commissioni ufficiali del broker, usa stime prudenti e dichiara chiaramente le assunzioni.
+""".strip()
+
 def main() -> None:
     """Entry point dell'applicazione Streamlit.
 
@@ -287,7 +390,6 @@ def main() -> None:
         bh=results["bh"],
         inflation=results["inflation"],
     )
-
 
 def render_sidebar() -> dict:
     """Renderizza tutti gli input utente nella sidebar e restituisce la configurazione."""
@@ -358,14 +460,92 @@ def render_sidebar() -> dict:
         max_value=date.today(),
     )
 
+    with st.sidebar.expander("🤖 Ask ChatGPT per configurare i parametri", expanded=False):
+        st.caption(
+            "Genera un prompt da copiare in ChatGPT per farti suggerire impostazioni "
+            "realistiche di costi, fiscalità, TER, slippage, inflazione e risk-free rate."
+        )
+
+        broker_name = st.text_input(
+            "Nome broker/intermediario",
+            value="",
+            placeholder="Esempio: Intesa, Mediolanum, UniCredit, Directa...",
+        )
+
+        try:
+            preview_tickers = parse_tickers(tickers_raw)
+            preview_weights = parse_weights(weights_raw, preview_tickers)
+
+            prompt_portfolio_df = pd.DataFrame(
+                {
+                    "ticker": preview_tickers,
+                    "peso": [
+                        round(preview_weights[ticker] * 100, 2)
+                        for ticker in preview_tickers
+                    ],
+                }
+            )
+
+            st.dataframe(
+                prompt_portfolio_df,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            chatgpt_prompt = generate_chatgpt_configuration_prompt(
+                broker_name=broker_name,
+                portfolio_df=prompt_portfolio_df,
+                start_date=start_date,
+                end_date=end_date,
+            )
+
+            st.text_area(
+                "Prompt da copiare in ChatGPT",
+                value=chatgpt_prompt,
+                height=360,
+                help="Copia questo testo e incollalo in una nuova chat ChatGPT.",
+            )
+
+            st.download_button(
+                "Scarica prompt .txt",
+                data=chatgpt_prompt,
+                file_name="prompt_configurazione_simulatore.txt",
+                mime="text/plain",
+                use_container_width=True,
+            )
+
+        except Exception as exc:
+            st.warning(
+                "Definisci prima un portafoglio valido per generare il prompt. "
+                f"Dettaglio: {exc}"
+            )
+
     st.sidebar.header("2. Parametri PAC")
-    pac_amount = st.sidebar.number_input("Importo versamento periodico", min_value=1.0, value=500.0, step=50.0)
+    pac_amount = st.sidebar.number_input(
+        "Importo versamento periodico",
+        min_value=1.0,
+        value=500.0,
+        step=50.0,
+    )
     pac_frequency = st.sidebar.selectbox("Frequenza", ["Mensile", "Trimestrale"], index=0)
     use_custom_day = st.sidebar.checkbox("Imposta giorno del versamento", value=True)
+
     pac_day = None
     if use_custom_day:
-        pac_day = int(st.sidebar.number_input("Giorno del mese", min_value=1, max_value=31, value=1, step=1))
-    buy_next_market_day = st.sidebar.checkbox("Acquista al primo giorno di mercato disponibile", value=True)
+        pac_day = int(
+            st.sidebar.number_input(
+                "Giorno del mese",
+                min_value=1,
+                max_value=31,
+                value=1,
+                step=1,
+            )
+        )
+
+    buy_next_market_day = st.sidebar.checkbox(
+        "Acquista al primo giorno di mercato disponibile",
+        value=True,
+    )
 
     st.sidebar.header("3. Buy and Hold")
     bh_mode = st.sidebar.radio(
@@ -373,7 +553,12 @@ def render_sidebar() -> dict:
         ["Capitale manuale", "Uguale al capitale totale versato dal PAC"],
         index=1,
     )
-    bh_initial_capital = st.sidebar.number_input("Capitale iniziale manuale", min_value=1.0, value=10_000.0, step=500.0)
+    bh_initial_capital = st.sidebar.number_input(
+        "Capitale iniziale manuale",
+        min_value=1.0,
+        value=10_000.0,
+        step=500.0,
+    )
 
     st.sidebar.header("4. Costi PAC")
     pac_costs = render_cost_inputs("pac", "PAC")
@@ -382,12 +567,46 @@ def render_sidebar() -> dict:
     bh_costs = render_cost_inputs("bh", "Buy and Hold")
 
     st.sidebar.header("6. Fiscalità e rischio")
-    tax_rate = st.sidebar.number_input("Aliquota fiscale plusvalenze (%)", min_value=0.0, max_value=100.0, value=DEFAULT_TAX_RATE, step=0.5) / 100.0
-    risk_free_rate = st.sidebar.number_input("Risk-free rate annuo (%)", min_value=-10.0, max_value=30.0, value=DEFAULT_RISK_FREE_RATE, step=0.25) / 100.0
+    tax_rate = (
+        st.sidebar.number_input(
+            "Aliquota fiscale plusvalenze (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=DEFAULT_TAX_RATE,
+            step=0.5,
+        )
+        / 100.0
+    )
+
+    risk_free_rate = (
+        st.sidebar.number_input(
+            "Risk-free rate annuo (%)",
+            min_value=-10.0,
+            max_value=30.0,
+            value=DEFAULT_RISK_FREE_RATE,
+            step=0.25,
+        )
+        / 100.0
+    )
 
     st.sidebar.header("7. Inflazione")
-    inflation_mode = st.sidebar.radio("Modalità inflazione", ["Tasso medio annuo manuale", "CSV storico"], index=0)
-    manual_inflation_rate = st.sidebar.number_input("Inflazione media annua (%)", min_value=-10.0, max_value=100.0, value=3.0, step=0.25) / 100.0
+    inflation_mode = st.sidebar.radio(
+        "Modalità inflazione",
+        ["Tasso medio annuo manuale", "CSV storico"],
+        index=0,
+    )
+
+    manual_inflation_rate = (
+        st.sidebar.number_input(
+            "Inflazione media annua (%)",
+            min_value=-10.0,
+            max_value=100.0,
+            value=3.0,
+            step=0.25,
+        )
+        / 100.0
+    )
+
     inflation_csv = None
     if inflation_mode == "CSV storico":
         uploaded = st.sidebar.file_uploader("CSV inflazione", type=["csv"])
@@ -399,9 +618,19 @@ def render_sidebar() -> dict:
         ["Totale PAC", "Capitale Buy and Hold", "Manuale"],
         index=0,
     )
-    inflation_manual_capital = st.sidebar.number_input("Capitale nominale manuale inflazione", min_value=0.0, value=10_000.0, step=500.0)
 
-    run = st.sidebar.button("Esegui simulazione", type="primary", use_container_width=True)
+    inflation_manual_capital = st.sidebar.number_input(
+        "Capitale nominale manuale inflazione",
+        min_value=0.0,
+        value=10_000.0,
+        step=500.0,
+    )
+
+    run = st.sidebar.button(
+        "Esegui simulazione",
+        type="primary",
+        use_container_width=True,
+    )
 
     return {
         "run": run,
@@ -425,7 +654,6 @@ def render_sidebar() -> dict:
         "inflation_capital_mode": inflation_capital_mode,
         "inflation_manual_capital": inflation_manual_capital,
     }
-
 
 def render_cost_inputs(prefix: str, label: str) -> CostConfig:
     """Renderizza input costi e restituisce CostConfig."""
