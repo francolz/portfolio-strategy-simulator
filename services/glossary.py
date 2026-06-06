@@ -80,6 +80,216 @@ L'obiettivo è mostrare l'impatto combinato di mercato, costi, fiscalità e infl
    - Clicca su **Esegui simulazione**.
    - L'app scarica i dati storici da Yahoo Finance, calcola le tre strategie e aggiorna dashboard, grafici, tabelle e file esportabili.
 
+### Esempi pratici di configurazione realistica
+
+Questi esempi aiutano a configurare l'app in modo coerente con un utilizzo realistico tramite una banca o un broker bancario tradizionale, come Intesa Sanpaolo, Mediolanum o UniCredit.
+
+I valori indicati sono esempi ragionevoli e prudenziali, non tariffe ufficiali vincolanti. Le commissioni effettive dipendono dal contratto, dal canale operativo, dal profilo cliente, da eventuali promozioni e dal mercato di negoziazione. Prima di usare l'app per valutazioni precise, è sempre opportuno verificare il proprio foglio condizioni.
+
+#### Nota importante sulle commissioni minime
+
+Molti intermediari applicano commissioni del tipo:
+
+`0,19% con minimo 7 €`
+
+L'app non gestisce automaticamente soglie minime e massime. Per simulare correttamente questo tipo di tariffa, si può usare una regola pratica:
+
+* se l'ordine è piccolo e il minimo commissionale è dominante, inserire la commissione minima come **commissione fissa** e lasciare la commissione percentuale a `0`;
+* se l'ordine è grande e la commissione percentuale è dominante, inserire la percentuale e lasciare la commissione fissa a `0`;
+* se il proprio broker applica davvero sia una componente fissa sia una componente percentuale, valorizzare entrambe.
+
+Esempio:
+
+* ordine da 500 € con tariffa 0,19% minimo 7 €: la commissione teorica percentuale sarebbe 0,95 €, quindi domina il minimo. Nell'app ha senso usare `Commissione fissa = 7` e `Commissione percentuale = 0`;
+* ordine da 10.000 € con tariffa 0,19% minimo 7 €: la commissione percentuale sarebbe 19 €, quindi ha senso usare `Commissione fissa = 0` e `Commissione percentuale = 0,19`.
+
+---
+
+## Esempio 1 — ETF globale: SWDA.MI
+
+Questo esempio simula un investimento in un ETF azionario globale ad accumulazione, come iShares Core MSCI World UCITS ETF.
+
+### Asset
+
+| Parametro                  |                 Valore suggerito |
+| -------------------------- | -------------------------------: |
+| Ticker                     |                        `SWDA.MI` |
+| Peso                       |                            `100` |
+| Periodo minimo consigliato |                   almeno 10 anni |
+| Tipo strumento             |            ETF azionario globale |
+| Dividendi                  | incorporati negli Adjusted Close |
+
+### Parametri PAC
+
+| Parametro                                    |                                             Valore suggerito |
+| -------------------------------------------- | -----------------------------------------------------------: |
+| Importo versamento periodico                 |                                              300 € - 1.000 € |
+| Frequenza                                    |                                                      Mensile |
+| Giorno versamento                            |                                                  5 oppure 15 |
+| Acquisto primo giorno di mercato disponibile |                                                       Attivo |
+| Commissione fissa PAC                        |                                                    5 € - 7 € |
+| Commissione percentuale PAC                  |               0% se si sta simulando il minimo commissionale |
+| Costi cambio PAC                             | 0% se l'acquisto avviene in euro senza conversione valutaria |
+| Slippage PAC                                 |                                                0,03% - 0,05% |
+| TER annuo ETF PAC                            |                                                        0,20% |
+
+Per versamenti piccoli, una commissione fissa di 5-7 € può incidere molto. Questo è utile per simulare realisticamente l'effetto negativo delle commissioni minime sui PAC di importo ridotto.
+
+### Parametri Buy and Hold
+
+| Parametro                            |                                             Valore suggerito |
+| ------------------------------------ | -----------------------------------------------------------: |
+| Modalità capitale                    |              Uguale al totale versato dal PAC oppure manuale |
+| Commissione fissa Buy and Hold       |                                 0 € se si usa la percentuale |
+| Commissione percentuale Buy and Hold |                                                0,19% - 0,25% |
+| Costi cambio Buy and Hold            | 0% se l'acquisto avviene in euro senza conversione valutaria |
+| Slippage Buy and Hold                |                                                0,03% - 0,05% |
+| TER annuo ETF Buy and Hold           |                                                        0,20% |
+
+Per un acquisto unico di importo elevato, la componente percentuale è spesso più realistica della sola commissione fissa.
+
+### Fiscalità e rischio
+
+| Parametro                    |                     Valore suggerito |
+| ---------------------------- | -----------------------------------: |
+| Aliquota fiscale plusvalenze |                                  26% |
+| Risk-free rate               |                              2% - 3% |
+| Inflazione                   | CSV storico Italia oppure 2% manuale |
+
+### Interpretazione
+
+Questo scenario è adatto per confrontare un PAC di lungo periodo con un investimento immediato in un ETF globale. Il TER deve essere valorizzato perché SWDA è un ETF. Lo slippage può essere basso perché si tratta normalmente di uno strumento liquido.
+
+---
+
+## Esempio 2 — Azione italiana: Enel
+
+Questo esempio simula un investimento in una singola azione italiana, come Enel.
+
+### Asset
+
+| Parametro                  |                 Valore suggerito |
+| -------------------------- | -------------------------------: |
+| Ticker                     |                        `ENEL.MI` |
+| Peso                       |                            `100` |
+| Periodo minimo consigliato |                 almeno 5-10 anni |
+| Tipo strumento             |                  Azione italiana |
+| Dividendi                  | incorporati negli Adjusted Close |
+
+### Parametri PAC
+
+| Parametro                                    |                               Valore suggerito |
+| -------------------------------------------- | ---------------------------------------------: |
+| Importo versamento periodico                 |                                500 € - 1.000 € |
+| Frequenza                                    |                     Mensile oppure trimestrale |
+| Giorno versamento                            |                                    5 oppure 15 |
+| Acquisto primo giorno di mercato disponibile |                                         Attivo |
+| Commissione fissa PAC                        |                                      5 € - 7 € |
+| Commissione percentuale PAC                  | 0% se si sta simulando il minimo commissionale |
+| Costi cambio PAC                             |                                             0% |
+| Slippage PAC                                 |                                  0,05% - 0,10% |
+| TER annuo ETF PAC                            |                                             0% |
+
+Per una singola azione il TER deve essere zero, perché il TER è un costo tipico di ETF e fondi, non delle azioni.
+
+### Parametri Buy and Hold
+
+| Parametro                            |                                Valore suggerito |
+| ------------------------------------ | ----------------------------------------------: |
+| Modalità capitale                    | Manuale oppure uguale al totale versato dal PAC |
+| Commissione fissa Buy and Hold       |                    0 € se si usa la percentuale |
+| Commissione percentuale Buy and Hold |                                   0,19% - 0,25% |
+| Costi cambio Buy and Hold            |                                              0% |
+| Slippage Buy and Hold                |                                   0,05% - 0,10% |
+| TER annuo ETF Buy and Hold           |                                              0% |
+
+### Fiscalità e rischio
+
+| Parametro                    |                     Valore suggerito |
+| ---------------------------- | -----------------------------------: |
+| Aliquota fiscale plusvalenze |                                  26% |
+| Risk-free rate               |                              2% - 3% |
+| Inflazione                   | CSV storico Italia oppure 2% manuale |
+
+### Interpretazione
+
+Questo scenario è più concentrato e rischioso rispetto all'ETF globale. La volatilità e il Maximum Drawdown possono essere molto più elevati, perché il portafoglio dipende da una sola società. Il TER va lasciato a zero. I dividendi storici sono generalmente riflessi negli Adjusted Close scaricati da Yahoo Finance.
+
+---
+
+## Esempio 3 — BTP italiano
+
+Questo esempio simula un investimento in un titolo di Stato italiano quotato. È utile per confrontare uno scenario obbligazionario con ETF o azioni.
+
+### Asset
+
+| Parametro                  |                        Valore suggerito |
+| -------------------------- | --------------------------------------: |
+| Ticker                     |     ticker Yahoo Finance del BTP scelto |
+| Peso                       |                                   `100` |
+| Periodo minimo consigliato | coerente con la vita residua del titolo |
+| Tipo strumento             |                Titolo di Stato italiano |
+| TER                        |                                      0% |
+
+Nota: per i singoli BTP, Yahoo Finance può avere dati incompleti o ticker difficili da identificare. Se il grafico parte dopo la data selezionata, controllare il warning sulla prima data disponibile e valutare un ticker alternativo. Per analisi obbligazionarie più robuste può essere più semplice usare un ETF obbligazionario governativo, ricordando però che in quel caso va inserito il relativo TER.
+
+### Parametri PAC
+
+Un PAC su un singolo BTP è meno comune rispetto a un PAC su ETF. Ha più senso simulare acquisti periodici solo se si vuole rappresentare una strategia di accumulo su obbligazioni o titoli di Stato.
+
+| Parametro                                    |                                Valore suggerito |
+| -------------------------------------------- | ----------------------------------------------: |
+| Importo versamento periodico                 | 1.000 € o multipli coerenti con il lotto minimo |
+| Frequenza                                    |                                     Trimestrale |
+| Giorno versamento                            |                                     5 oppure 15 |
+| Acquisto primo giorno di mercato disponibile |                                          Attivo |
+| Commissione fissa PAC                        |                                      7 € - 12 € |
+| Commissione percentuale PAC                  |    0% se si simula una commissione minima/fissa |
+| Costi cambio PAC                             |                                              0% |
+| Slippage PAC                                 |                                   0,05% - 0,20% |
+| TER annuo ETF PAC                            |                                              0% |
+
+### Parametri Buy and Hold
+
+| Parametro                            |                         Valore suggerito |
+| ------------------------------------ | ---------------------------------------: |
+| Modalità capitale                    |                                  Manuale |
+| Capitale iniziale                    | importo effettivo che si vuole investire |
+| Commissione fissa Buy and Hold       |                               7 € - 12 € |
+| Commissione percentuale Buy and Hold |                               0% - 0,10% |
+| Costi cambio Buy and Hold            |                                       0% |
+| Slippage Buy and Hold                |                            0,05% - 0,20% |
+| TER annuo ETF Buy and Hold           |                                       0% |
+
+Per un BTP acquistato e mantenuto fino a scadenza, il Buy and Hold è spesso la modalità più coerente. Il PAC può essere usato solo come confronto teorico.
+
+### Fiscalità e rischio
+
+| Parametro                    |                     Valore suggerito |
+| ---------------------------- | -----------------------------------: |
+| Aliquota fiscale plusvalenze |                                12,5% |
+| Risk-free rate               |                              2% - 3% |
+| Inflazione                   | CSV storico Italia oppure 2% manuale |
+
+### Interpretazione
+
+Il BTP ha una fiscalità agevolata rispetto ad azioni ed ETF azionari. Il TER va lasciato a zero, perché un singolo titolo di Stato non ha costi annui di gestione come un ETF. Lo slippage può essere superiore rispetto a un ETF molto liquido, soprattutto su strumenti meno scambiati o in fasi di mercato volatili.
+
+Attenzione: l'app usa gli Adjusted Close di Yahoo Finance. Per singoli BTP, la qualità dei dati può essere meno omogenea rispetto ad azioni ed ETF. Inoltre, la simulazione può non rappresentare perfettamente il rendimento effettivo a scadenza, le cedole incassate e il reinvestimento delle cedole. Per questo motivo, i risultati sui BTP vanno interpretati come una simulazione indicativa basata sui prezzi storici disponibili.
+
+---
+
+## Riepilogo veloce dei valori consigliati
+
+| Caso         |   TER | Fiscalità |      Slippage | Costi cambio |             Commissioni PAC |    Commissioni Buy and Hold |
+| ------------ | ----: | --------: | ------------: | -----------: | --------------------------: | --------------------------: |
+| ETF SWDA.MI  | 0,20% |       26% | 0,03% - 0,05% |           0% | fissa 5-7 € se rata piccola |               0,19% - 0,25% |
+| Azione Enel  |    0% |       26% | 0,05% - 0,10% |           0% | fissa 5-7 € se rata piccola |               0,19% - 0,25% |
+| BTP italiano |    0% |     12,5% | 0,05% - 0,20% |           0% |                fissa 7-12 € | fissa 7-12 € oppure 0-0,10% |
+
+Questi valori non sostituiscono le condizioni contrattuali del proprio intermediario, ma permettono di ottenere simulazioni più realistiche rispetto a uno scenario senza costi.
+
+
 ### Come interpretare i risultati
 - **Valore finale lordo**: valore prima della tassazione finale, dopo costi di acquisto e TER.
 - **Valore finale netto**: valore finale dopo la tassazione della plusvalenza positiva.
