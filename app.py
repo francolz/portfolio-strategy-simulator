@@ -164,6 +164,89 @@ def parse_portfolio_upload(uploaded_file) -> tuple[str, str, pd.DataFrame]:
 
     return tickers_raw, weights_raw, portfolio_df
 
+def render_market_data_warning(
+    requested_start_date: date,
+    prices: pd.DataFrame,
+    tickers: list[str],
+) -> None:
+    """Mostra un avviso se i dati disponibili partono dopo la data richiesta.
+
+    In un portafoglio multi-asset la simulazione può iniziare solo dalla prima
+    data in cui tutti gli asset hanno un prezzo valido. Se uno o più ticker
+    hanno uno storico più corto, l'intero portafoglio parte più tardi.
+    """
+    if prices.empty:
+        return
+
+    requested_start = pd.Timestamp(requested_start_date)
+    actual_start = pd.Timestamp(prices.index.min()).normalize()
+
+    if actual_start <= requested_start:
+        return
+
+    first_valid_dates = []
+
+    for ticker in tickers:
+        if ticker not in prices.columns:
+            first_valid_dates.append(
+                {
+                    "Ticker": ticker,
+                    "Prima data disponibile": "Non disponibile",
+                    "Giorni di ritardo": None,
+                }
+            )
+            continue
+
+        series = prices[ticker].dropna()
+
+        if series.empty:
+            first_valid_dates.append(
+                {
+                    "Ticker": ticker,
+                    "Prima data disponibile": "Non disponibile",
+                    "Giorni di ritardo": None,
+                }
+            )
+            continue
+
+        first_date = pd.Timestamp(series.index.min()).normalize()
+        delay_days = int((first_date - requested_start).days)
+
+        first_valid_dates.append(
+            {
+                "Ticker": ticker,
+                "Prima data disponibile": first_date.date(),
+                "Giorni di ritardo": max(delay_days, 0),
+            }
+        )
+
+    availability_df = pd.DataFrame(first_valid_dates)
+
+    limiting_assets = availability_df[
+        availability_df["Prima data disponibile"].astype(str)
+        == str(actual_start.date())
+    ]["Ticker"].tolist()
+
+    st.warning(
+        "La simulazione non parte dalla data iniziale richiesta. "
+        f"Hai richiesto il {requested_start.date()}, ma il portafoglio può essere "
+        f"simulato solo dal {actual_start.date()}, perché è la prima data comune "
+        "in cui tutti gli asset hanno un prezzo disponibile."
+    )
+
+    if limiting_assets:
+        st.info(
+            "Ticker che probabilmente stanno limitando l'inizio della simulazione: "
+            + ", ".join(limiting_assets)
+        )
+
+    with st.expander("Dettaglio disponibilità dati per ticker", expanded=False):
+        st.dataframe(
+            availability_df,
+            use_container_width=True,
+            hide_index=True,
+        )
+
 def main() -> None:
     """Entry point dell'applicazione Streamlit.
 
@@ -386,6 +469,11 @@ def run_simulation(config: dict) -> dict:
 
     with st.spinner("Download dati Yahoo Finance e preparazione simulazione..."):
         prices = download_adjusted_close(tuple(tickers), start_ts.strftime("%Y-%m-%d"), end_ts.strftime("%Y-%m-%d"))
+        render_market_data_warning(
+            requested_start_date=start_ts.date(),
+            prices=prices,
+            tickers=tickers,
+        )
         weights = normalize_weights(weights, prices)
         inflation_unit = build_inflation_result(
             dates=prices.index,
