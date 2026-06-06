@@ -169,25 +169,28 @@ def render_market_data_warning(
     prices: pd.DataFrame,
     tickers: list[str],
 ) -> None:
-    """Mostra un avviso se i dati disponibili partono dopo la data richiesta.
+    """Mostra un avviso se il portafoglio parte dopo la data richiesta.
 
-    In un portafoglio multi-asset la simulazione può iniziare solo dalla prima
-    data in cui tutti gli asset hanno un prezzo valido. Se uno o più ticker
-    hanno uno storico più corto, l'intero portafoglio parte più tardi.
+    Usa prices.attrs["first_valid_dates"], salvato in download_adjusted_close(),
+    per identificare solo i ticker che hanno realmente storico più corto.
     """
     if prices.empty:
         return
 
-    requested_start = pd.Timestamp(requested_start_date)
+    requested_start = pd.Timestamp(requested_start_date).normalize()
     actual_start = pd.Timestamp(prices.index.min()).normalize()
 
     if actual_start <= requested_start:
         return
 
+    raw_first_dates = prices.attrs.get("first_valid_dates", {})
+
     first_valid_dates = []
 
     for ticker in tickers:
-        if ticker not in prices.columns:
+        raw_date = raw_first_dates.get(ticker)
+
+        if raw_date is None or pd.isna(raw_date):
             first_valid_dates.append(
                 {
                     "Ticker": ticker,
@@ -197,19 +200,7 @@ def render_market_data_warning(
             )
             continue
 
-        series = prices[ticker].dropna()
-
-        if series.empty:
-            first_valid_dates.append(
-                {
-                    "Ticker": ticker,
-                    "Prima data disponibile": "Non disponibile",
-                    "Giorni di ritardo": None,
-                }
-            )
-            continue
-
-        first_date = pd.Timestamp(series.index.min()).normalize()
+        first_date = pd.Timestamp(raw_date).normalize()
         delay_days = int((first_date - requested_start).days)
 
         first_valid_dates.append(
@@ -236,9 +227,20 @@ def render_market_data_warning(
 
     if limiting_assets:
         st.info(
-            "Ticker che probabilmente stanno limitando l'inizio della simulazione: "
+            "Ticker che stanno limitando l'inizio della simulazione: "
             + ", ".join(limiting_assets)
         )
+    else:
+        st.info(
+            "La simulazione parte dopo la data richiesta, ma non è stato possibile "
+            "identificare con certezza un singolo ticker responsabile."
+        )
+
+    st.caption(
+        "Suggerimento: se vuoi simulare dal periodo selezionato, valuta di sostituire "
+        "i ticker indicati con strumenti equivalenti che abbiano uno storico più lungo "
+        "su Yahoo Finance."
+    )
 
     with st.expander("Dettaglio disponibilità dati per ticker", expanded=False):
         st.dataframe(
@@ -246,7 +248,7 @@ def render_market_data_warning(
             use_container_width=True,
             hide_index=True,
         )
-
+ 
 def main() -> None:
     """Entry point dell'applicazione Streamlit.
 
