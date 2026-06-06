@@ -391,9 +391,196 @@ def main() -> None:
         inflation=results["inflation"],
     )
 
+def generate_portfolio_xlsx_prompt(raw_portfolio_description: str) -> str:
+    """Genera un prompt per trasformare nomi comuni di strumenti in portafoglio.xlsx.
+
+    L'obiettivo è aiutare l'utente a ottenere un file Excel compatibile con
+    il simulatore, partendo da nomi descrittivi come 'Enel', 'Ferrari',
+    'MSCI World ETF', ecc.
+    """
+    description = raw_portfolio_description.strip()
+
+    if not description:
+        description = """
+Enel 20
+Ferrari 20
+MSCI World ETF 60
+""".strip()
+
+    return f"""
+Voglio creare un file Excel chiamato `portafoglio.xlsx` da usare come input in questo simulatore Streamlit:
+
+https://github.com/francolz/portfolio-strategy-simulator
+
+Il simulatore richiede un file Excel con due colonne:
+
+| ticker | peso |
+|---|---:|
+
+Dove:
+
+- `ticker` deve essere il ticker Yahoo Finance corretto;
+- `peso` deve essere il peso percentuale dell'asset nel portafoglio;
+- la somma dei pesi dovrebbe essere 100;
+- i ticker devono essere compatibili con Yahoo Finance e, se possibile, avere uno storico dati sufficientemente lungo.
+
+Questa è la lista degli strumenti che vorrei inserire nel portafoglio, con i pesi indicativi:
+
+{description}
+
+Aiutami a trasformare questa lista in un file `portafoglio.xlsx` compatibile con il simulatore.
+
+Istruzioni:
+
+1. Identifica per ogni strumento il ticker Yahoo Finance più appropriato.
+2. Se esistono più quotazioni possibili, preferisci:
+   - strumenti quotati su Borsa Italiana se disponibili;
+   - strumenti quotati in EUR;
+   - strumenti con storico dati più lungo;
+   - strumenti liquidi e facilmente scaricabili da Yahoo Finance.
+3. Se un nome è ambiguo, proponi la scelta più probabile e indicami eventuali alternative.
+4. Verifica che la somma dei pesi sia 100. Se non lo è, normalizzala e spiegami la modifica.
+5. Crea un file Excel `portafoglio.xlsx` con colonne esattamente:
+   - `ticker`
+   - `peso`
+6. Oltre al file Excel, mostrami anche una tabella riepilogativa con:
+   - nome originale inserito;
+   - ticker Yahoo Finance scelto;
+   - peso;
+   - mercato;
+   - valuta;
+   - eventuali note o alternative.
+
+Formato finale desiderato del file:
+
+| ticker | peso |
+|---|---:|
+| ENEL.MI | 20 |
+| RACE.MI | 20 |
+| SWDA.MI | 60 |
+
+Se non puoi creare direttamente il file Excel, forniscimi almeno il contenuto CSV da salvare come `portafoglio.csv`.
+""".strip()
+
+def generate_inflation_csv_prompt(
+    country_name: str,
+    start_date: date,
+    end_date: date,
+    use_simulation_period: bool,
+    custom_start_date: date,
+    custom_end_date: date,
+    preferred_source: str,
+    frequency: str,
+) -> str:
+    """Genera un prompt per creare un file inflazione.csv compatibile con l'app."""
+    country = country_name.strip() if country_name.strip() else "[INSERISCI PAESE]"
+
+    inflation_start = start_date if use_simulation_period else custom_start_date
+    inflation_end = end_date if use_simulation_period else custom_end_date
+
+    return f"""
+Voglio creare un file CSV chiamato `inflazione.csv` da usare come input in questo simulatore Streamlit:
+
+https://github.com/francolz/portfolio-strategy-simulator
+
+Il simulatore consente di caricare un CSV storico dell'inflazione.
+
+Il file deve contenere almeno queste colonne:
+
+| Date | inflation_rate |
+|---|---:|
+
+Dove:
+
+- `Date` deve essere una data in formato `YYYY-MM-DD`;
+- `inflation_rate` deve essere il tasso di inflazione annualizzato espresso in forma decimale;
+- esempio: `0.025` significa `2,5%`;
+- la frequenza desiderata è: {frequency};
+- il paese richiesto è: {country};
+- il periodo richiesto è da {inflation_start} a {inflation_end}.
+
+Fonte preferita:
+
+{preferred_source}
+
+Aiutami a creare un file `inflazione.csv` compatibile con il simulatore.
+
+Istruzioni:
+
+1. Trova una fonte affidabile per l'inflazione storica del paese indicato.
+2. Preferisci fonti ufficiali o facilmente verificabili, ad esempio:
+   - istituto statistico nazionale;
+   - Eurostat;
+   - FRED;
+   - OECD;
+   - World Bank;
+   - banca centrale nazionale.
+3. Se disponibili dati mensili, usa dati mensili.
+4. Se sono disponibili solo dati annuali, usa dati annuali e spiegami il limite.
+5. Il tasso `inflation_rate` deve rappresentare l'inflazione annua osservata nel periodo, preferibilmente variazione anno-su-anno dell'indice dei prezzi.
+6. Non usare percentuali testuali nel CSV: usa valori decimali.
+   - 2,5% deve diventare `0.025`;
+   - -0,3% deve diventare `-0.003`.
+7. Il CSV finale deve avere almeno queste colonne:
+   - `Date`
+   - `inflation_rate`
+8. Se utile, puoi aggiungere colonne informative extra, per esempio:
+   - `country`
+   - `source`
+   - `index_name`
+   - `calculation`
+9. Verifica che le date coprano il periodo richiesto.
+10. Mostrami anche le prime e le ultime righe del dataset.
+
+Formato finale desiderato:
+
+```csv
+Date,inflation_rate,country,source,calculation
+2015-01-01,0.005,Italy,Eurostat/FRED,YoY CPI or HICP inflation
+2015-02-01,0.002,Italy,Eurostat/FRED,YoY CPI or HICP inflation""".strip()
+
+
 def render_sidebar() -> dict:
     """Renderizza tutti gli input utente nella sidebar e restituisce la configurazione."""
     st.sidebar.header("1. Portafoglio")
+
+    with st.sidebar.expander("🤖 Non conosci i ticker Yahoo?", expanded=False):
+        st.caption(
+            "Inserisci nomi comuni di azioni, ETF o obbligazioni e genera un prompt "
+            "da copiare in ChatGPT per creare il file portafoglio.xlsx."
+        )
+
+        raw_portfolio_description = st.text_area(
+            "Lista strumenti e pesi desiderati",
+            value="Enel 20\nFerrari 20\nMSCI World ETF 60",
+            height=140,
+            help=(
+                "Esempio:\n"
+                "Enel 20\n"
+                "Ferrari 20\n"
+                "MSCI World ETF 60"
+            ),
+        )
+
+        portfolio_prompt = generate_portfolio_xlsx_prompt(raw_portfolio_description)
+
+        st.text_area(
+            "Prompt da copiare in ChatGPT",
+            value=portfolio_prompt,
+            height=320,
+            help=(
+                "Copia questo prompt in ChatGPT per ottenere un file Excel o CSV "
+                "compatibile con il simulatore."
+            ),
+        )
+
+        st.download_button(
+            "Scarica prompt .txt",
+            data=portfolio_prompt,
+            file_name="prompt_creazione_portafoglio.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
 
     portfolio_file = st.sidebar.file_uploader(
         "Carica portafoglio da Excel/CSV",
@@ -520,6 +707,92 @@ def render_sidebar() -> dict:
                 f"Dettaglio: {exc}"
             )
 
+    with st.sidebar.expander("🤖 Genera prompt inflazione.csv", expanded=False):
+        st.caption(
+            "Genera un prompt da copiare in ChatGPT per creare un CSV storico "
+            "dell'inflazione compatibile con il simulatore."
+        )
+
+        inflation_country = st.text_input(
+            "Paese inflazione",
+            value="Italia",
+            placeholder="Esempio: Italia, Germania, Stati Uniti, Francia...",
+        )
+
+        use_simulation_period_for_inflation = st.checkbox(
+            "Usa lo stesso periodo della simulazione",
+            value=True,
+        )
+
+        custom_inflation_start = start_date
+        custom_inflation_end = end_date
+
+        if not use_simulation_period_for_inflation:
+            custom_inflation_start = st.date_input(
+                "Data inizio inflazione",
+                value=start_date,
+                min_value=date(1900, 1, 1),
+                max_value=date.today(),
+                key="custom_inflation_start_prompt",
+            )
+
+            custom_inflation_end = st.date_input(
+                "Data fine inflazione",
+                value=end_date,
+                min_value=date(1900, 1, 1),
+                max_value=date.today(),
+                key="custom_inflation_end_prompt",
+            )
+
+        inflation_frequency_prompt = st.selectbox(
+            "Frequenza desiderata",
+            ["Mensile", "Annuale"],
+            index=0,
+        )
+
+        preferred_inflation_source = st.selectbox(
+            "Fonte preferita",
+            [
+                "Fonte ufficiale migliore disponibile",
+                "Eurostat",
+                "FRED",
+                "ISTAT",
+                "OECD",
+                "World Bank",
+                "Banca centrale nazionale",
+            ],
+            index=0,
+        )
+
+        inflation_prompt = generate_inflation_csv_prompt(
+            country_name=inflation_country,
+            start_date=start_date,
+            end_date=end_date,
+            use_simulation_period=use_simulation_period_for_inflation,
+            custom_start_date=custom_inflation_start,
+            custom_end_date=custom_inflation_end,
+            preferred_source=preferred_inflation_source,
+            frequency=inflation_frequency_prompt,
+        )
+
+        st.text_area(
+            "Prompt da copiare in ChatGPT",
+            value=inflation_prompt,
+            height=340,
+            help=(
+                "Copia questo prompt in ChatGPT per ottenere un file inflazione.csv "
+                "compatibile con il simulatore."
+            ),
+        )
+
+        st.download_button(
+            "Scarica prompt .txt",
+            data=inflation_prompt,
+            file_name="prompt_creazione_inflazione_csv.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+
     st.sidebar.header("2. Parametri PAC")
     pac_amount = st.sidebar.number_input(
         "Importo versamento periodico",
@@ -611,7 +884,10 @@ def render_sidebar() -> dict:
     if inflation_mode == "CSV storico":
         uploaded = st.sidebar.file_uploader("CSV inflazione", type=["csv"])
         inflation_csv = uploaded.getvalue() if uploaded is not None else None
-        st.sidebar.caption("Colonne attese: data + tasso inflazione annuo. Esempio: Date,Inflation")
+        st.sidebar.caption(
+            "Colonne attese: Date + inflation_rate. "
+            "Il tasso deve essere annualizzato e in formato decimale: 0.025 = 2,5%."
+        )
 
     inflation_capital_mode = st.sidebar.radio(
         "Capitale per confronto inflazione",
@@ -654,6 +930,8 @@ def render_sidebar() -> dict:
         "inflation_capital_mode": inflation_capital_mode,
         "inflation_manual_capital": inflation_manual_capital,
     }
+
+
 
 def render_cost_inputs(prefix: str, label: str) -> CostConfig:
     """Renderizza input costi e restituisce CostConfig."""
