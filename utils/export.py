@@ -19,7 +19,6 @@ def dataframe_to_csv_bytes(df: pd.DataFrame) -> bytes:
     """Converte un DataFrame in CSV UTF-8 scaricabile."""
     return clean_numeric_dataframe(df).to_csv(index=True).encode("utf-8-sig")
 
-
 def create_excel_export(
     dashboard_summary: pd.DataFrame,
     pac_history: pd.DataFrame,
@@ -27,6 +26,7 @@ def create_excel_export(
     time_series: pd.DataFrame,
     risk_metrics: pd.DataFrame,
     strategy_comparison: pd.DataFrame,
+    configuration: pd.DataFrame | None = None,
 ) -> bytes:
     """Crea un file Excel multi-sheet con tutti i risultati della simulazione.
 
@@ -37,8 +37,22 @@ def create_excel_export(
     4. Serie temporali
     5. Metriche di rischio
     6. Confronto strategie
+    7. Configurazione, se fornita
+
+    Args:
+        dashboard_summary: tabella sintetica con KPI delle strategie.
+        pac_history: storico operativo del PAC.
+        buy_hold_history: storico Buy and Hold.
+        time_series: serie temporali usate per i grafici.
+        risk_metrics: metriche di rischio.
+        strategy_comparison: confronto tra strategie.
+        configuration: parametri della sidebar esportati come tabella.
+
+    Returns:
+        Bytes del file Excel pronto per il download.
     """
     output = BytesIO()
+
     sheets = {
         "Dashboard sintetica": dashboard_summary,
         "Storico PAC": pac_history,
@@ -48,10 +62,23 @@ def create_excel_export(
         "Confronto strategie": strategy_comparison,
     }
 
+    if configuration is not None and not configuration.empty:
+        sheets["Configurazione"] = configuration
+
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         for sheet_name, df in sheets.items():
             export_df = clean_numeric_dataframe(df.copy())
-            export_df.to_excel(writer, sheet_name=sheet_name, index=True)
+
+            # La configurazione è già una tabella descrittiva:
+            # Sezione | Parametro | Valore.
+            # Non serve esportare l'indice.
+            write_index = sheet_name != "Configurazione"
+
+            export_df.to_excel(
+                writer,
+                sheet_name=sheet_name,
+                index=write_index,
+            )
 
         workbook = writer.book
         for worksheet in workbook.worksheets:
