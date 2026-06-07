@@ -35,6 +35,9 @@ from utils.dates import generate_contribution_dates
 from utils.export import create_excel_export, dataframe_to_csv_bytes
 from utils.helpers import format_currency, format_percentage, parse_tickers, parse_weights
 
+import re
+import unicodedata
+
 from datetime import date
 st.set_page_config(page_title=APP_TITLE, page_icon=APP_ICON, layout="wide")
 
@@ -65,6 +68,61 @@ CURRENCY_ROWS = {
     "Perdita potere acquisto",
 }
 LOWER_IS_BETTER = {"Costi", "Tasse", "Maximum Drawdown", "Volatilità annualizzata"}
+
+def slugify_filename_part(value: str, default: str = "portafoglio") -> str:
+    """Rende una stringa sicura per essere usata nel nome di un file.
+
+    Esempi:
+    - "ETF World 80/20" -> "etf_world_80_20"
+    - "Portafoglio Italia & USA" -> "portafoglio_italia_usa"
+    """
+    text = str(value or "").strip()
+
+    if not text:
+        text = default
+
+    text = unicodedata.normalize("NFKD", text)
+    text = text.encode("ascii", "ignore").decode("ascii")
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9]+", "_", text)
+    text = re.sub(r"_+", "_", text)
+    text = text.strip("_")
+
+    return text or default
+
+
+def build_export_period_suffix(
+    portfolio_name: str,
+    start_date: date,
+    end_date: date,
+) -> str:
+    """Costruisce la parte finale del nome file: [nome]_YYYYMM_YYYYMM."""
+    safe_name = slugify_filename_part(portfolio_name)
+
+    start_ym = pd.Timestamp(start_date).strftime("%Y%m")
+    end_ym = pd.Timestamp(end_date).strftime("%Y%m")
+
+    return f"{safe_name}_{start_ym}_{end_ym}"
+
+
+def build_excel_export_filename(
+    portfolio_name: str,
+    start_date: date,
+    end_date: date,
+) -> str:
+    """Nome file Excel della simulazione."""
+    suffix = build_export_period_suffix(portfolio_name, start_date, end_date)
+    return f"simulazione_portafoglio_{suffix}.xlsx"
+
+
+def build_comparison_csv_filename(
+    portfolio_name: str,
+    start_date: date,
+    end_date: date,
+) -> str:
+    """Nome file CSV del confronto strategie."""
+    suffix = build_export_period_suffix(portfolio_name, start_date, end_date)
+    return f"confronto_strategie_{suffix}.csv"
 
 def parse_portfolio_upload(uploaded_file) -> tuple[str, str, pd.DataFrame]:
     """Legge un portafoglio da file Excel/CSV.
@@ -371,6 +429,7 @@ def main() -> None:
     if sidebar_config["run"]:
         try:
             st.session_state["simulation_results"] = run_simulation(sidebar_config)
+            st.session_state["simulation_config"] = sidebar_config
         except (ValueError, MarketDataError) as exc:
             st.error(str(exc))
             return
@@ -389,6 +448,7 @@ def main() -> None:
         pac=results["pac"],
         bh=results["bh"],
         inflation=results["inflation"],
+        config=st.session_state.get("simulation_config", sidebar_config),
     )
 
 def generate_portfolio_xlsx_prompt(raw_portfolio_description: str) -> str:
@@ -561,6 +621,15 @@ def get_default_start_date() -> date:
 def render_sidebar() -> dict:
     """Renderizza tutti gli input utente nella sidebar e restituisce la configurazione."""
     st.sidebar.header("1. Portafoglio")
+
+    portfolio_name = st.sidebar.text_input(
+    "Nome portafoglio",
+    value="portafoglio",
+    help=(
+        "Nome usato per personalizzare i file esportati. "
+        "Esempio: ETF World, Azioni Italia, Core Portfolio."
+        ),
+    )
 
     with st.sidebar.expander("🤖 Non conosci i ticker Yahoo?", expanded=False):
         st.caption(
@@ -929,6 +998,7 @@ def render_sidebar() -> dict:
 
     return {
         "run": run,
+        "portfolio_name": portfolio_name,
         "tickers_raw": tickers_raw,
         "weights_raw": weights_raw,
         "start_date": start_date,
@@ -1086,21 +1156,30 @@ def choose_inflation_capital(config: dict, pac_result: PACResult, bh_result: Buy
         return float(config["inflation_manual_capital"])
     return float(pac_result.summary["Capitale investito"])
 
-
 def render_results(
     prices: pd.DataFrame,
     weights: dict[str, float],
     pac: PACResult,
     bh: BuyHoldResult,
     inflation: InflationResult,
+    config: dict,
 ) -> None:
     """Renderizza le sei tab della dashboard."""
     st.success("Simulazione completata.")
+
     with st.expander("Portafoglio simulato", expanded=False):
-        weights_df = pd.DataFrame({"Ticker": list(weights.keys()), "Peso": list(weights.values())})
+        weights_df = pd.DataFrame(
+            {
+                "Ticker": list(weights.keys()),
+                "Peso": list(weights.values()),
+            }
+        )
         weights_df["Peso"] = weights_df["Peso"].map(lambda x: f"{x:.2%}")
         st.dataframe(weights_df, use_container_width=True, hide_index=True)
-        st.caption(f"Dati disponibili dal {prices.index.min().date()} al {prices.index.max().date()} su {len(prices)} sedute comuni.")
+        st.caption(
+            f"Dati disponibili dal {prices.index.min().date()} "
+            f"al {prices.index.max().date()} su {len(prices)} sedute comuni."
+        )
 
     comparison = build_comparison_table(pac, bh, inflation)
     dashboard_summary = build_dashboard_summary(pac, bh, inflation)
@@ -1120,14 +1199,27 @@ def render_results(
 
     with tab1:
         render_dashboard_tab(pac, bh, inflation, comparison)
+
     with tab2:
         render_capital_evolution_tab(time_series)
+
     with tab3:
         render_pac_detail_tab(pac)
+
     with tab4:
         render_performance_tab(pac, bh)
+
     with tab5:
-        render_export_tab(dashboard_summary, pac, bh, time_series, risk_table, comparison)
+        render_export_tab(
+            dashboard_summary=dashboard_summary,
+            pac=pac,
+            bh=bh,
+            time_series=time_series,
+            risk_table=risk_table,
+            comparison=comparison,
+            config=config,
+        )
+
     with tab6:
         st.markdown(full_manual_markdown())
 
@@ -1270,7 +1362,6 @@ def render_performance_tab(pac: PACResult, bh: BuyHoldResult) -> None:
         vol_fig.update_layout(height=430, yaxis_title="Volatilità")
         st.plotly_chart(vol_fig, use_container_width=True)
 
-
 def render_export_tab(
     dashboard_summary: pd.DataFrame,
     pac: PACResult,
@@ -1278,9 +1369,36 @@ def render_export_tab(
     time_series: pd.DataFrame,
     risk_table: pd.DataFrame,
     comparison: pd.DataFrame,
+    config: dict,
 ) -> None:
-    """Tab 5: export Excel e CSV."""
+    """Tab 5: export Excel e CSV con nomi file personalizzati.
+
+    I file esportati includono:
+    - nome portafoglio scelto dall'utente;
+    - anno/mese inizio simulazione;
+    - anno/mese fine simulazione.
+
+    Esempio:
+    simulazione_portafoglio_etf_world_202506_202606.xlsx
+    confronto_strategie_etf_world_202506_202606.csv
+    """
     st.subheader("Download dati")
+
+    portfolio_name = config.get("portfolio_name", "portafoglio")
+    start_date = config["start_date"]
+    end_date = config["end_date"]
+
+    export_suffix = build_export_period_suffix(
+        portfolio_name=portfolio_name,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    excel_filename = f"simulazione_portafoglio_{export_suffix}.xlsx"
+    comparison_csv_filename = f"confronto_strategie_{export_suffix}.csv"
+    pac_csv_filename = f"storico_pac_{export_suffix}.csv"
+    time_series_csv_filename = f"serie_temporali_{export_suffix}.csv"
+
     excel_bytes = create_excel_export(
         dashboard_summary=dashboard_summary,
         pac_history=pac.history,
@@ -1289,21 +1407,50 @@ def render_export_tab(
         risk_metrics=risk_table,
         strategy_comparison=comparison,
     )
+
     st.download_button(
         "Scarica Excel multi-sheet (.xlsx)",
         data=excel_bytes,
-        file_name="simulazione_portafoglio.xlsx",
+        file_name=excel_filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
     )
 
     col1, col2, col3 = st.columns(3)
-    col1.download_button("CSV confronto", dataframe_to_csv_bytes(comparison), "confronto_strategie.csv", "text/csv")
-    col2.download_button("CSV storico PAC", dataframe_to_csv_bytes(pac.history), "storico_pac.csv", "text/csv")
-    col3.download_button("CSV serie temporali", dataframe_to_csv_bytes(time_series), "serie_temporali.csv", "text/csv")
+
+    col1.download_button(
+        "CSV confronto",
+        data=dataframe_to_csv_bytes(comparison),
+        file_name=comparison_csv_filename,
+        mime="text/csv",
+        use_container_width=True,
+    )
+
+    col2.download_button(
+        "CSV storico PAC",
+        data=dataframe_to_csv_bytes(pac.history),
+        file_name=pac_csv_filename,
+        mime="text/csv",
+        use_container_width=True,
+    )
+
+    col3.download_button(
+        "CSV serie temporali",
+        data=dataframe_to_csv_bytes(time_series),
+        file_name=time_series_csv_filename,
+        mime="text/csv",
+        use_container_width=True,
+    )
+
+    st.caption(
+        f"I file esportati useranno il suffisso: `{export_suffix}`"
+    )
 
     st.subheader("Anteprima confronto")
-    st.dataframe(comparison.style.format(format_comparison_value), use_container_width=True)
+    st.dataframe(
+        comparison.style.format(format_comparison_value),
+        use_container_width=True,
+    )
 
 
 def build_comparison_table(pac: PACResult, bh: BuyHoldResult, inflation: InflationResult) -> pd.DataFrame:
