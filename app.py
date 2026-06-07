@@ -1361,6 +1361,184 @@ def render_performance_tab(pac: PACResult, bh: BuyHoldResult) -> None:
         vol_fig = go.Figure([go.Bar(x=vol_df["Strategia"], y=vol_df["Volatilità annualizzata"])])
         vol_fig.update_layout(height=430, yaxis_title="Volatilità")
         st.plotly_chart(vol_fig, use_container_width=True)
+def config_to_export_dataframe(config: dict) -> pd.DataFrame:
+    """Converte la configurazione della sidebar in una tabella esportabile.
+
+    La funzione produce una tabella a tre colonne:
+    - Sezione
+    - Parametro
+    - Valore
+
+    Nota:
+    - non esporta il contenuto binario del CSV inflazione;
+    - indica però se un CSV inflazione era stato caricato;
+    - gestisce CostConfig sia come dataclass/oggetto sia come dizionario.
+    """
+
+    rows: list[dict[str, object]] = []
+
+    def add_row(section: str, parameter: str, value: object) -> None:
+        rows.append(
+            {
+                "Sezione": section,
+                "Parametro": parameter,
+                "Valore": value,
+            }
+        )
+
+    def fmt_bool(value: bool) -> str:
+        return "Sì" if bool(value) else "No"
+
+    def fmt_date(value: object) -> str:
+        if value is None:
+            return "n.d."
+        try:
+            return pd.Timestamp(value).strftime("%Y-%m-%d")
+        except Exception:
+            return str(value)
+
+    def fmt_number(value: object, decimals: int = 2) -> str:
+        if value is None:
+            return "n.d."
+        try:
+            return f"{float(value):.{decimals}f}"
+        except Exception:
+            return str(value)
+
+    def fmt_percent(value: object, decimals: int = 4) -> str:
+        if value is None:
+            return "n.d."
+        try:
+            return f"{float(value) * 100:.{decimals}f}%"
+        except Exception:
+            return str(value)
+
+    def get_cost_value(costs: object, field_name: str, default: float = 0.0) -> float:
+        """Legge un campo costo da CostConfig o da dizionario."""
+        if costs is None:
+            return default
+
+        if isinstance(costs, dict):
+            return float(costs.get(field_name, default) or default)
+
+        return float(getattr(costs, field_name, default) or default)
+
+    pac_costs = config.get("pac_costs")
+    bh_costs = config.get("bh_costs")
+
+    add_row("Portafoglio", "Nome portafoglio", config.get("portfolio_name", "portafoglio"))
+    add_row("Portafoglio", "Ticker Yahoo Finance", config.get("tickers_raw", ""))
+    add_row("Portafoglio", "Pesi portafoglio", config.get("weights_raw", ""))
+
+    add_row("Periodo", "Data inizio", fmt_date(config.get("start_date")))
+    add_row("Periodo", "Data fine", fmt_date(config.get("end_date")))
+
+    add_row("PAC", "Importo versamento periodico", fmt_number(config.get("pac_amount")))
+    add_row("PAC", "Frequenza", config.get("pac_frequency", ""))
+    add_row(
+        "PAC",
+        "Giorno versamento",
+        config.get("pac_day") if config.get("pac_day") is not None else "Non impostato",
+    )
+    add_row(
+        "PAC",
+        "Acquista al primo giorno di mercato disponibile",
+        fmt_bool(config.get("buy_next_market_day", False)),
+    )
+
+    add_row("Buy and Hold", "Modalità capitale iniziale", config.get("bh_mode", ""))
+    add_row(
+        "Buy and Hold",
+        "Capitale iniziale manuale",
+        fmt_number(config.get("bh_initial_capital")),
+    )
+
+    add_row(
+        "Costi PAC",
+        "Commissione fissa PAC",
+        fmt_number(get_cost_value(pac_costs, "fixed_fee")),
+    )
+    add_row(
+        "Costi PAC",
+        "Commissione percentuale PAC",
+        fmt_percent(get_cost_value(pac_costs, "percentage_fee")),
+    )
+    add_row(
+        "Costi PAC",
+        "Costi cambio PAC",
+        fmt_percent(get_cost_value(pac_costs, "fx_fee")),
+    )
+    add_row(
+        "Costi PAC",
+        "Slippage PAC",
+        fmt_percent(get_cost_value(pac_costs, "slippage")),
+    )
+    add_row(
+        "Costi PAC",
+        "TER annuo ETF PAC",
+        fmt_percent(get_cost_value(pac_costs, "annual_ter")),
+    )
+
+    add_row(
+        "Costi Buy and Hold",
+        "Commissione fissa Buy and Hold",
+        fmt_number(get_cost_value(bh_costs, "fixed_fee")),
+    )
+    add_row(
+        "Costi Buy and Hold",
+        "Commissione percentuale Buy and Hold",
+        fmt_percent(get_cost_value(bh_costs, "percentage_fee")),
+    )
+    add_row(
+        "Costi Buy and Hold",
+        "Costi cambio Buy and Hold",
+        fmt_percent(get_cost_value(bh_costs, "fx_fee")),
+    )
+    add_row(
+        "Costi Buy and Hold",
+        "Slippage Buy and Hold",
+        fmt_percent(get_cost_value(bh_costs, "slippage")),
+    )
+    add_row(
+        "Costi Buy and Hold",
+        "TER annuo ETF Buy and Hold",
+        fmt_percent(get_cost_value(bh_costs, "annual_ter")),
+    )
+
+    add_row(
+        "Fiscalità e rischio",
+        "Aliquota fiscale plusvalenze",
+        fmt_percent(config.get("tax_rate")),
+    )
+    add_row(
+        "Fiscalità e rischio",
+        "Risk-free rate annuo",
+        fmt_percent(config.get("risk_free_rate")),
+    )
+
+    add_row("Inflazione", "Modalità inflazione", config.get("inflation_mode", ""))
+    add_row(
+        "Inflazione",
+        "Inflazione media annua manuale",
+        fmt_percent(config.get("manual_inflation_rate")),
+    )
+    add_row(
+        "Inflazione",
+        "CSV inflazione caricato",
+        fmt_bool(config.get("inflation_csv") is not None),
+    )
+    add_row(
+        "Inflazione",
+        "Capitale per confronto inflazione",
+        config.get("inflation_capital_mode", ""),
+    )
+    add_row(
+        "Inflazione",
+        "Capitale nominale manuale inflazione",
+        fmt_number(config.get("inflation_manual_capital")),
+    )
+
+    return pd.DataFrame(rows)
 
 def render_export_tab(
     dashboard_summary: pd.DataFrame,
@@ -1371,16 +1549,14 @@ def render_export_tab(
     comparison: pd.DataFrame,
     config: dict,
 ) -> None:
-    """Tab 5: export Excel e CSV con nomi file personalizzati.
+    """Tab 5: export Excel e CSV con nomi file personalizzati e configurazione.
 
     I file esportati includono:
     - nome portafoglio scelto dall'utente;
     - anno/mese inizio simulazione;
     - anno/mese fine simulazione.
 
-    Esempio:
-    simulazione_portafoglio_etf_world_202506_202606.xlsx
-    confronto_strategie_etf_world_202506_202606.csv
+    L'Excel multi-sheet include anche il foglio "Configurazione".
     """
     st.subheader("Download dati")
 
@@ -1398,6 +1574,9 @@ def render_export_tab(
     comparison_csv_filename = f"confronto_strategie_{export_suffix}.csv"
     pac_csv_filename = f"storico_pac_{export_suffix}.csv"
     time_series_csv_filename = f"serie_temporali_{export_suffix}.csv"
+    configuration_csv_filename = f"configurazione_simulazione_{export_suffix}.csv"
+
+    configuration_df = config_to_export_dataframe(config)
 
     excel_bytes = create_excel_export(
         dashboard_summary=dashboard_summary,
@@ -1406,6 +1585,7 @@ def render_export_tab(
         time_series=time_series,
         risk_metrics=risk_table,
         strategy_comparison=comparison,
+        configuration=configuration_df,
     )
 
     st.download_button(
@@ -1416,7 +1596,7 @@ def render_export_tab(
         use_container_width=True,
     )
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     col1.download_button(
         "CSV confronto",
@@ -1442,16 +1622,32 @@ def render_export_tab(
         use_container_width=True,
     )
 
-    st.caption(
-        f"I file esportati useranno il suffisso: `{export_suffix}`"
+    col4.download_button(
+        "CSV configurazione",
+        data=dataframe_to_csv_bytes(configuration_df),
+        file_name=configuration_csv_filename,
+        mime="text/csv",
+        use_container_width=True,
     )
+
+    st.caption(
+        f"I file esportati useranno il suffisso: `{export_suffix}`. "
+        "L'Excel contiene anche il foglio `Configurazione` con i parametri impostati nella sidebar."
+    )
+
+    st.subheader("Anteprima configurazione")
+    with st.expander("Mostra configurazione esportata", expanded=False):
+        st.dataframe(
+            configuration_df,
+            use_container_width=True,
+            hide_index=True,
+        )
 
     st.subheader("Anteprima confronto")
     st.dataframe(
         comparison.style.format(format_comparison_value),
         use_container_width=True,
     )
-
 
 def build_comparison_table(pac: PACResult, bh: BuyHoldResult, inflation: InflationResult) -> pd.DataFrame:
     """Crea tabella comparativa tra PAC, Buy and Hold e inflazione."""
