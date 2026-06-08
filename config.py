@@ -23,6 +23,15 @@ class CostConfig:
     """Parametri di costo applicabili a una strategia.
 
     Le percentuali sono espresse in forma decimale, quindi 0.01 indica 1%.
+
+    Nota:
+    `annual_ter` resta il nome tecnico interno per compatibilità con il
+    resto del codice, ma nell'interfaccia utente rappresenta un
+    "costo annuo aggiuntivo opzionale".
+
+    Per ETF reali scaricati da Yahoo Finance, questo valore dovrebbe
+    normalmente essere 0%, perché i costi interni del fondo sono già
+    riflessi nella performance storica/NAV dell'ETF.
     """
 
     fixed_fee: float = 0.0
@@ -35,8 +44,8 @@ class CostConfig:
         """Calcola i costi espliciti di una singola operazione.
 
         I costi espliciti includono commissione fissa, commissione percentuale,
-        costo di cambio e slippage. Il TER è escluso perché viene modellato come
-        erosione giornaliera del valore della posizione.
+        costo di cambio e slippage. Il costo annuo aggiuntivo è escluso perché
+        viene modellato come erosione giornaliera opzionale del valore della posizione.
         """
         variable_cost = gross_amount * (self.percentage_fee + self.fx_fee + self.slippage)
         return max(0.0, self.fixed_fee + variable_cost)
