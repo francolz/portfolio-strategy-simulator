@@ -1659,6 +1659,8 @@ def build_comparison_table(pac: PACResult, bh: BuyHoldResult, inflation: Inflati
         "Valore finale netto",
         "Profitto netto",
         "CAGR",
+        "IRR",
+        "XIRR",
         "Rendimento reale",
         "Maximum Drawdown",
         "Sharpe Ratio",
