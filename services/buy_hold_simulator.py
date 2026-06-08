@@ -138,7 +138,7 @@ def simulate_buy_and_hold(
         "Capitale investito": initial_capital,
         "Capitale netto investito": net_invested,
         "Costi espliciti": explicit_cost,
-        "Costi TER stimati": ter_costs,
+        "Costi annui aggiuntivi stimati": ter_costs,
         "Costi": total_costs,
         "Valore finale lordo": final_gross_value,
         "Plusvalenza tassabile": taxable_gain,
@@ -184,15 +184,20 @@ def _build_buy_hold_value_series(
     trade_date: pd.Timestamp,
     annual_ter: float,
 ) -> pd.Series:
-    """Costruisce la serie valore Buy and Hold con drag TER giornaliero."""
+    """Costruisce la serie valore Buy and Hold con eventuale costo annuo aggiuntivo.
+
+    Il parametro annual_ter è un nome interno legacy: nell'interfaccia utente
+    rappresenta un costo annuo aggiuntivo opzionale, non un TER da applicare
+    automaticamente agli ETF reali.
+    """
     annual_ter = min(max(float(annual_ter), 0.0), 0.9999)
     effective_prices = prices.loc[prices.index >= trade_date]
     shares_series = pd.Series(shares).reindex(prices.columns).fillna(0.0)
     raw_value = effective_prices.mul(shares_series, axis=1).sum(axis=1)
     if annual_ter > 0:
         days = (raw_value.index - trade_date).days.astype(float)
-        ter_factor = np.power(1.0 - annual_ter, days / 365.25)
-        raw_value = raw_value * ter_factor
+        annual_cost_factor = np.power(1.0 - annual_ter, days / 365.25)
+        raw_value = raw_value * annual_cost_factor
     return raw_value.rename("Valore Buy and Hold")
 
 

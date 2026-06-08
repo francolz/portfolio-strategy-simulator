@@ -76,7 +76,7 @@ def simulate_pac(
     2. vengono sottratti i costi espliciti;
     3. il capitale netto viene allocato sugli asset secondo i pesi;
     4. vengono acquistate quote frazionarie;
-    5. il TER viene applicato come drag giornaliero sul valore del lotto.
+    5. l’eventuale costo annuo aggiuntivo viene applicato come drag giornaliero sul valore del lotto.
     """
     if contribution_amount <= 0:
         raise ValueError("L'importo periodico del PAC deve essere positivo.")
@@ -203,7 +203,7 @@ def simulate_pac(
         "Capitale investito": total_contributed,
         "Capitale netto investito": net_invested,
         "Costi espliciti": explicit_costs,
-        "Costi TER stimati": ter_costs,
+        "Costi annui aggiuntivi stimati": ter_costs,
         "Costi": total_costs,
         "Valore finale lordo": final_gross_value,
         "Plusvalenza tassabile": taxable_gain,
@@ -245,14 +245,17 @@ def simulate_pac(
 
 
 def _build_value_series(prices: pd.DataFrame, lots: list[Lot], annual_ter: float) -> pd.Series:
-    """Costruisce la serie storica del valore posizione applicando il TER per lotto.
+    """Costruisce la serie storica del valore posizione.
 
-    Il TER viene approssimato come una riduzione composta giornaliera:
+    `annual_ter` è un nome interno legacy: nella UI rappresenta un
+    costo annuo aggiuntivo opzionale.
 
-        valore_lotto_t = valore_lordo_lotto_t * (1 - TER)^(giorni_dal_acquisto / 365,25)
+    Se maggiore di 0, viene approssimato come riduzione composta giornaliera:
 
-    Questa modellazione evita di applicare il TER una sola volta a fine periodo e
-    produce una stima più coerente del drag temporale del fondo/ETF.
+        valore_lotto_t = valore_lordo_lotto_t * (1 - costo_annuo_aggiuntivo)^(giorni_dal_acquisto / 365,25)
+
+    Per ETF reali scaricati da Yahoo Finance il valore consigliato è normalmente 0%,
+    perché i costi interni del fondo sono già riflessi nella performance/NAV storica.
     """
     annual_ter = min(max(float(annual_ter), 0.0), 0.9999)
     values = pd.Series(0.0, index=prices.index, dtype=float)

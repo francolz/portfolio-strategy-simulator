@@ -10,6 +10,7 @@ import yfinance as yf
 class MarketDataError(RuntimeError):
     """Errore applicativo relativo al download o alla qualità dei dati di mercato."""
 
+
 @st.cache_data(show_spinner=False, ttl=60 * 60)
 def download_adjusted_close(
     tickers: tuple[str, ...],
@@ -20,11 +21,6 @@ def download_adjusted_close(
 
     Gli Adjusted Close incorporano split e dividendi, rendendo i prezzi più adatti
     alle simulazioni di performance storica total-return.
-
-    La funzione conserva anche, dentro prices.attrs["first_valid_dates"], la prima
-    data disponibile per ogni ticker prima dell'allineamento alla prima data comune.
-    Questo permette all'app di avvisare correttamente quali ticker stanno accorciando
-    il periodo simulabile.
 
     Args:
         tickers: tuple di ticker Yahoo Finance.
@@ -43,7 +39,6 @@ def download_adjusted_close(
 
     start = pd.Timestamp(start_date).normalize()
     end = pd.Timestamp(end_date).normalize()
-
     if start >= end:
         raise MarketDataError("La data di inizio deve essere precedente alla data di fine.")
 
@@ -65,9 +60,7 @@ def download_adjusted_close(
         raise MarketDataError(f"Errore durante il download da Yahoo Finance: {exc}") from exc
 
     if raw is None or raw.empty:
-        raise MarketDataError(
-            "Yahoo Finance non ha restituito dati per il periodo e i ticker selezionati."
-        )
+        raise MarketDataError("Yahoo Finance non ha restituito dati per il periodo e i ticker selezionati.")
 
     prices = _extract_adjusted_close(raw, list(tickers))
     prices = prices.sort_index()
@@ -78,43 +71,18 @@ def download_adjusted_close(
     if prices.empty:
         raise MarketDataError("Nessuna seduta di mercato disponibile nel periodo selezionato.")
 
-    invalid = [
-        ticker
-        for ticker in tickers
-        if ticker not in prices.columns or prices[ticker].dropna().empty
-    ]
-
+    invalid = [ticker for ticker in tickers if ticker not in prices.columns or prices[ticker].dropna().empty]
     if invalid:
         raise MarketDataError(
-            "Ticker non validi o senza dati nel periodo selezionato: "
-            + ", ".join(invalid)
+            "Ticker non validi o senza dati nel periodo selezionato: " + ", ".join(invalid)
         )
 
-    # Salviamo le prime date disponibili PRIMA dell'allineamento.
-    # Dopo ffill().dropna(how="any") tutte le colonne partiranno dalla stessa data comune,
-    # quindi perderemmo l'informazione su quale ticker ha storico più corto.
-    first_valid_dates = {
-        ticker: prices[ticker].first_valid_index()
-        for ticker in tickers
-        if ticker in prices.columns
-    }
-
-    aligned_prices = prices[list(tickers)].ffill().dropna(how="any")
-
-    if aligned_prices.empty:
+    prices = prices[list(tickers)].ffill().dropna(how="any")
+    if prices.empty:
         raise MarketDataError(
-            "I ticker selezionati non hanno date comuni sufficienti. "
-            "Prova un periodo diverso o rimuovi asset illiquidi."
+            "I ticker selezionati non hanno date comuni sufficienti. Prova un periodo diverso o rimuovi asset illiquidi."
         )
-
-    aligned_prices = aligned_prices.astype(float)
-
-    # Metadata usato dall'app per mostrare warning più precisi.
-    aligned_prices.attrs["first_valid_dates"] = first_valid_dates
-    aligned_prices.attrs["requested_start_date"] = start
-    aligned_prices.attrs["actual_start_date"] = aligned_prices.index.min()
-
-    return aligned_prices
+    return prices.astype(float)
 
 
 def _extract_adjusted_close(raw: pd.DataFrame, tickers: list[str]) -> pd.DataFrame:
