@@ -1259,7 +1259,10 @@ def render_dashboard_tab(pac: PACResult, bh: BuyHoldResult, inflation: Inflation
     cols[0].metric("Capitale investito", format_currency_compact(selected["Capitale investito"]))
     cols[1].metric("Valore finale netto", format_currency_compact(selected["Valore finale netto"]))
     cols[2].metric("Profitto netto", format_currency_compact(selected["Profitto netto"]))
-    cols[3].metric("CAGR", format_percentage(selected["CAGR"]))
+    if kpi_strategy == "PAC" and "XIRR" in selected and pd.notna(selected["XIRR"]):
+        cols[3].metric("XIRR", format_percentage(selected["XIRR"]))
+    else:
+        cols[3].metric("CAGR", format_percentage(selected["CAGR"]))
     cols[4].metric("Maximum Drawdown", format_percentage(selected["Maximum Drawdown"]))
 
     st.subheader("Tabella comparativa")
@@ -1285,7 +1288,10 @@ def render_dashboard_tab(pac: PACResult, bh: BuyHoldResult, inflation: Inflation
     
     st.dataframe(styled, use_container_width=True)
     st.caption(
-        "Il valore evidenziato indica il miglior risultato nella riga. Per costi e tasse è migliore il valore più basso; per il Maximum Drawdown è migliore il valore più vicino a zero."
+    "Il valore evidenziato indica il miglior risultato nella riga. "
+    "Per costi e tasse è migliore il valore più basso; per il Maximum Drawdown "
+    "è migliore il valore più vicino a zero. Per il PAC, XIRR è più rappresentativo "
+    "del CAGR perché considera il calendario dei versamenti."
     )
 
     st.subheader("Capitale non investito e inflazione")
