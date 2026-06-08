@@ -353,6 +353,18 @@ Voglio configurare il simulatore nel modo più realistico possibile.
 
 Aiutami a stimare i parametri più sensati per questo broker e per questi strumenti finanziari.
 
+Nota metodologica importante:
+
+Il simulatore usa prezzi storici Yahoo Finance, normalmente Adjusted Close.
+Yahoo Adjusted Close rettifica split e distribuzioni/dividendi, non il TER.
+Tuttavia, se il ticker è un ETF reale, i prezzi storici dell'ETF riflettono già
+la performance del fondo dopo i costi interni di gestione.
+
+Per questo motivo, il campo "Costo annuo aggiuntivo" va normalmente lasciato a 0%
+quando si usano ETF reali scaricati da Yahoo Finance. Va impostato maggiore di 0%
+solo per benchmark teorici, indici non investibili, simulazioni conservative o
+costi annui aggiuntivi non già incorporati nei prezzi storici.
+
 Il simulatore confronta:
 
 1. PAC
@@ -370,7 +382,8 @@ Indicami valori realistici per tutti questi parametri:
 - Commissione percentuale PAC
 - Costi di cambio PAC
 - Slippage PAC
-- TER annuo ETF PAC
+- Costo annuo aggiuntivo PAC
+- Se il costo annuo aggiuntivo va lasciato a 0% perché il ticker è un ETF reale
 
 ## Parametri Buy and Hold
 
@@ -380,7 +393,8 @@ Indicami valori realistici per tutti questi parametri:
 - Commissione percentuale Buy and Hold
 - Costi di cambio Buy and Hold
 - Slippage Buy and Hold
-- TER annuo ETF Buy and Hold
+- Costo annuo aggiuntivo Buy and Hold
+- Se il costo annuo aggiuntivo va lasciato a 0% perché il ticker è un ETF reale
 
 ## Fiscalità
 
@@ -404,11 +418,14 @@ Indicami valori realistici per tutti questi parametri:
 - Eventuali limiti dei dati Yahoo Finance
 - Eventuali ticker alternativi più adatti se quelli indicati hanno storico incompleto
 - Eventuali accorgimenti per rendere la simulazione più realistica
+- Se il portafoglio contiene ETF reali, spiegami chiaramente perché il costo annuo aggiuntivo dovrebbe essere 0%
+- Se invece ha senso usare un costo annuo aggiuntivo maggiore di 0%, spiegami perché
 
 Rispondimi con una tabella pratica pronta da usare nel simulatore.
 
 Quando non hai dati certi sulle commissioni ufficiali del broker, usa stime prudenti e dichiara chiaramente le assunzioni.
 """.strip()
+
 
 def main() -> None:
     """Entry point dell'applicazione Streamlit.
@@ -421,7 +438,8 @@ def main() -> None:
     """
     st.title(f"{APP_ICON} {APP_TITLE}")
     st.caption(
-        "Simula un portafoglio multi-asset con dati Yahoo Finance Adjusted Close, costi, TER, fiscalità e inflazione."
+        "Simula un portafoglio multi-asset con dati Yahoo Finance Adjusted Close, "
+        "commissioni, fiscalità, inflazione e costi annui aggiuntivi opzionali."
     )
 
     sidebar_config = render_sidebar()
@@ -737,7 +755,8 @@ def render_sidebar() -> dict:
     with st.sidebar.expander("🤖 Ask ChatGPT per configurare i parametri", expanded=False):
         st.caption(
             "Genera un prompt da copiare in ChatGPT per farti suggerire impostazioni "
-            "realistiche di costi, fiscalità, TER, slippage, inflazione e risk-free rate."
+            "realistiche di commissioni, fiscalità, slippage, inflazione, risk-free rate "
+            "ed eventuali costi annui aggiuntivi."
         )
 
         broker_name = st.text_input(
@@ -1023,13 +1042,82 @@ def render_sidebar() -> dict:
 
 
 def render_cost_inputs(prefix: str, label: str) -> CostConfig:
-    """Renderizza input costi e restituisce CostConfig."""
+    """Renderizza input costi e restituisce CostConfig.
+
+    Nota metodologica:
+    quando si usano ticker reali di ETF scaricati da Yahoo Finance,
+    il costo annuo aggiuntivo dovrebbe normalmente essere lasciato a 0%.
+
+    Il motivo non è che Yahoo Adjusted Close rettifichi il TER:
+    Adjusted Close rettifica split e distribuzioni/dividendi.
+    Il punto è che i prezzi storici reali dell'ETF riflettono già la
+    performance del fondo dopo i costi interni di gestione.
+    """
     with st.sidebar.expander(f"Dettaglio costi {label}", expanded=False):
-        fixed_fee = st.number_input(f"Commissione fissa {label}", min_value=0.0, value=1.0 if prefix == "pac" else 5.0, step=0.5, key=f"{prefix}_fixed")
-        percentage_fee = st.number_input(f"Commissione percentuale {label} (%)", min_value=0.0, value=0.10, step=0.05, key=f"{prefix}_pct") / 100.0
-        fx_fee = st.number_input(f"Costi di cambio {label} (%)", min_value=0.0, value=0.0, step=0.05, key=f"{prefix}_fx") / 100.0
-        slippage = st.number_input(f"Slippage {label} (%)", min_value=0.0, value=0.05, step=0.01, key=f"{prefix}_slippage") / 100.0
-        annual_ter = st.number_input(f"TER annuo ETF {label} (%)", min_value=0.0, value=0.20, step=0.05, key=f"{prefix}_ter") / 100.0
+        fixed_fee = st.number_input(
+            f"Commissione fissa {label}",
+            min_value=0.0,
+            value=1.0 if prefix == "pac" else 5.0,
+            step=0.5,
+            key=f"{prefix}_fixed",
+        )
+        percentage_fee = (
+            st.number_input(
+                f"Commissione percentuale {label} (%)",
+                min_value=0.0,
+                value=0.10,
+                step=0.05,
+                key=f"{prefix}_pct",
+            )
+            / 100.0
+        )
+        fx_fee = (
+            st.number_input(
+                f"Costi di cambio {label} (%)",
+                min_value=0.0,
+                value=0.0,
+                step=0.05,
+                key=f"{prefix}_fx",
+            )
+            / 100.0
+        )
+        slippage = (
+            st.number_input(
+                f"Slippage {label} (%)",
+                min_value=0.0,
+                value=0.05,
+                step=0.01,
+                key=f"{prefix}_slippage",
+            )
+            / 100.0
+        )
+        annual_ter = (
+            st.number_input(
+                f"Costo annuo aggiuntivo {label} (%)",
+                min_value=0.0,
+                value=0.0,
+                step=0.05,
+                key=f"{prefix}_ter",
+                help=(
+                    "Lascia 0% se usi prezzi storici reali di ETF da Yahoo Finance. "
+                    "Yahoo Adjusted Close rettifica split e distribuzioni/dividendi; "
+                    "il TER invece è normalmente già riflesso nella performance/NAV "
+                    "storica dell'ETF. Usa un valore maggiore di 0 solo per benchmark "
+                    "teorici, simulazioni conservative o costi annui aggiuntivi non "
+                    "già incorporati nei prezzi."
+                ),
+            )
+            / 100.0
+        )
+
+        if annual_ter > 0:
+            st.warning(
+                "Hai impostato un costo annuo aggiuntivo maggiore di 0%. "
+                "Se stai usando un ETF reale scaricato da Yahoo Finance, questo può "
+                "penalizzare ulteriormente la performance perché i costi interni del "
+                "fondo sono già riflessi nei prezzi storici dell'ETF."
+            )
+
     return CostConfig(
         fixed_fee=fixed_fee,
         percentage_fee=percentage_fee,
@@ -1049,8 +1137,13 @@ def render_intro() -> None:
         - Dati Yahoo Finance con prezzi **Adjusted Close**.
         - Confronto PAC, Buy and Hold e capitale reale eroso dall'inflazione.
         - Costi separati per PAC e Buy and Hold.
-        - TER, fiscalità sulla plusvalenza positiva, CAGR, IRR, XIRR, Sharpe Ratio e Maximum Drawdown.
+        - Costo annuo aggiuntivo opzionale, fiscalità sulla plusvalenza positiva, CAGR, IRR, XIRR, Sharpe Ratio e Maximum Drawdown.
         - Export Excel multi-sheet e CSV.
+
+        ### Nota sul costo annuo aggiuntivo
+        Se usi ticker reali di ETF scaricati da Yahoo Finance, il valore consigliato è normalmente **0%**.
+
+        Yahoo Adjusted Close rettifica split e distribuzioni/dividendi. I costi interni del fondo, come il TER, sono invece già riflessi nella performance storica/NAV dell'ETF. Impostare un costo annuo aggiuntivo maggiore di 0% su un ETF reale equivale quindi a fare una simulazione più conservativa.
         """
     )
 
@@ -1259,10 +1352,7 @@ def render_dashboard_tab(pac: PACResult, bh: BuyHoldResult, inflation: Inflation
     cols[0].metric("Capitale investito", format_currency_compact(selected["Capitale investito"]))
     cols[1].metric("Valore finale netto", format_currency_compact(selected["Valore finale netto"]))
     cols[2].metric("Profitto netto", format_currency_compact(selected["Profitto netto"]))
-    if kpi_strategy == "PAC" and "XIRR" in selected and pd.notna(selected["XIRR"]):
-        cols[3].metric("XIRR", format_percentage(selected["XIRR"]))
-    else:
-        cols[3].metric("CAGR", format_percentage(selected["CAGR"]))
+    cols[3].metric("CAGR", format_percentage(selected["CAGR"]))
     cols[4].metric("Maximum Drawdown", format_percentage(selected["Maximum Drawdown"]))
 
     st.subheader("Tabella comparativa")
@@ -1288,10 +1378,7 @@ def render_dashboard_tab(pac: PACResult, bh: BuyHoldResult, inflation: Inflation
     
     st.dataframe(styled, use_container_width=True)
     st.caption(
-    "Il valore evidenziato indica il miglior risultato nella riga. "
-    "Per costi e tasse è migliore il valore più basso; per il Maximum Drawdown "
-    "è migliore il valore più vicino a zero. Per il PAC, XIRR è più rappresentativo "
-    "del CAGR perché considera il calendario dei versamenti."
+        "Il valore evidenziato indica il miglior risultato nella riga. Per costi e tasse è migliore il valore più basso; per il Maximum Drawdown è migliore il valore più vicino a zero."
     )
 
     st.subheader("Capitale non investito e inflazione")
@@ -1481,7 +1568,7 @@ def config_to_export_dataframe(config: dict) -> pd.DataFrame:
     )
     add_row(
         "Costi PAC",
-        "TER annuo ETF PAC",
+        "Costo annuo aggiuntivo PAC",
         fmt_percent(get_cost_value(pac_costs, "annual_ter")),
     )
 
@@ -1507,7 +1594,7 @@ def config_to_export_dataframe(config: dict) -> pd.DataFrame:
     )
     add_row(
         "Costi Buy and Hold",
-        "TER annuo ETF Buy and Hold",
+        "Costo annuo aggiuntivo Buy and Hold",
         fmt_percent(get_cost_value(bh_costs, "annual_ter")),
     )
 
