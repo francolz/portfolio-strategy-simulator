@@ -19,6 +19,7 @@ def dataframe_to_csv_bytes(df: pd.DataFrame) -> bytes:
     """Converte un DataFrame in CSV UTF-8 scaricabile."""
     return clean_numeric_dataframe(df).to_csv(index=True).encode("utf-8-sig")
 
+
 def create_excel_export(
     dashboard_summary: pd.DataFrame,
     pac_history: pd.DataFrame,
@@ -38,22 +39,10 @@ def create_excel_export(
     5. Metriche di rischio
     6. Confronto strategie
     7. Configurazione, se fornita
-
-    Args:
-        dashboard_summary: tabella sintetica con KPI delle strategie.
-        pac_history: storico operativo del PAC.
-        buy_hold_history: storico Buy and Hold.
-        time_series: serie temporali usate per i grafici.
-        risk_metrics: metriche di rischio.
-        strategy_comparison: confronto tra strategie.
-        configuration: parametri della sidebar esportati come tabella.
-
-    Returns:
-        Bytes del file Excel pronto per il download.
     """
     output = BytesIO()
 
-    sheets = {
+    sheets: dict[str, pd.DataFrame] = {
         "Dashboard sintetica": dashboard_summary,
         "Storico PAC": pac_history,
         "Storico BuyHold": buy_hold_history,
@@ -69,9 +58,9 @@ def create_excel_export(
         for sheet_name, df in sheets.items():
             export_df = clean_numeric_dataframe(df.copy())
 
-            # La configurazione è già una tabella descrittiva:
+            # Il foglio Configurazione è già una tabella descrittiva:
             # Sezione | Parametro | Valore.
-            # Non serve esportare l'indice.
+            # Per questo non esportiamo l'indice.
             write_index = sheet_name != "Configurazione"
 
             export_df.to_excel(
@@ -96,7 +85,11 @@ def _style_worksheet(worksheet) -> None:
     for cell in worksheet[1]:
         cell.fill = header_fill
         cell.font = header_font
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True,
+        )
 
     worksheet.freeze_panes = "A2"
     worksheet.auto_filter.ref = worksheet.dimensions
@@ -104,10 +97,17 @@ def _style_worksheet(worksheet) -> None:
     for column_cells in worksheet.columns:
         max_length = 0
         column_letter = get_column_letter(column_cells[0].column)
+
         for cell in column_cells:
             value = "" if cell.value is None else str(cell.value)
             max_length = max(max_length, len(value))
+
             if isinstance(cell.value, float):
                 cell.number_format = "#,##0.00"
+
             cell.alignment = Alignment(vertical="top", wrap_text=False)
-        worksheet.column_dimensions[column_letter].width = min(max(max_length + 2, 12), 38)
+
+        worksheet.column_dimensions[column_letter].width = min(
+            max(max_length + 2, 12),
+            38,
+        )
